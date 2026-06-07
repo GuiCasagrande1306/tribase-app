@@ -1361,22 +1361,59 @@ function ExportPanel({ workouts, profile }) {
 }
 
 /* ================= listas / linhas ================= */
+function weekSummary(items) {
+  const dist = {}; let min = 0, done = 0;
+  items.forEach((w) => {
+    min += w.durationMin || 0;
+    if (w.status === "concluído") done++;
+    if (w.distance) {
+      const v = w.discipline === "Natação"
+        ? (w.distUnit === "km" ? w.distance * 1000 : w.distance)   // metros
+        : (w.distUnit === "m" ? w.distance / 1000 : w.distance);   // km
+      dist[w.discipline] = (dist[w.discipline] || 0) + v;
+    }
+  });
+  return { dist, min, done, count: items.length };
+}
+const fmtWeekDist = (disc, v) => (disc === "Natação" ? `${Math.round(v)}m` : `${(+v).toFixed(1)}km`);
 function WorkoutList({ workouts, onToggle, onRpe, onDelete, onOpen, coach }) {
   const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
   const groups = {};
   sorted.forEach((w) => { const k = weekStart(w.date).toISOString().slice(0, 10); (groups[k] = groups[k] || []).push(w); });
   const keys = Object.keys(groups).sort();
+  const [open, setOpen] = useState({});
   if (!sorted.length) return <Empty>Nenhum treino ainda.</Empty>;
   return (
-    <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {keys.map((k) => (
-        <div key={k}>
-          <div className="mono" style={{ fontSize: 11.5, color: MUTE, marginBottom: 8, letterSpacing: 0.5 }}>SEMANA DE {dm(toDate(k))}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {groups[k].map((w) => <WorkoutRow key={w.id} w={w} onToggle={onToggle} onRpe={onRpe} onDelete={onDelete} onOpen={onOpen} coach={coach} />)}
+    <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {keys.map((k) => {
+        const items = groups[k]; const s = weekSummary(items); const isOpen = !!open[k];
+        return (
+          <div key={k} style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 14, overflow: "hidden" }}>
+            <button onClick={() => setOpen((p) => ({ ...p, [k]: !p[k] }))} style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "12px 14px",
+              cursor: "pointer", background: "transparent", border: "none", textAlign: "left",
+            }}>
+              <ChevronRight size={16} color={MUTE} style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
+              <span className="mono" style={{ fontSize: 11.5, color: isOpen ? TEXT : MUTE, letterSpacing: 0.3, flexShrink: 0, fontWeight: 600 }}>
+                {dm(toDate(k))}–{dm(toDate(addDays(k, 6)))}
+              </span>
+              <div style={{ flex: 1, display: "flex", gap: 10, flexWrap: "wrap", minWidth: 0 }} className="mono">
+                {DISCIPLINES.filter((d) => s.dist[d]).map((d) => (
+                  <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, color: "#cdd6e6" }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 4, background: DISC[d].c }} />{fmtWeekDist(d, s.dist[d])}
+                  </span>
+                ))}
+              </div>
+              <span className="mono" style={{ fontSize: 11, color: MUTE, flexShrink: 0 }}>{fmtDur(s.min)} · <span style={{ color: "#a3e635" }}>{s.done}/{s.count}</span></span>
+            </button>
+            {isOpen && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 12px 12px" }}>
+                {items.map((w) => <WorkoutRow key={w.id} w={w} onToggle={onToggle} onRpe={onRpe} onDelete={onDelete} onOpen={onOpen} coach={coach} />)}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
