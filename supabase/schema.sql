@@ -187,3 +187,86 @@ create policy workouts_delete_athlete on public.workouts for delete
   using ( athlete_id = auth.uid() );
 
 -- Pronto. Veja o README.md para os próximos passos (chaves + deploy).
+
+-- ============================================================
+-- FASE 1 — MULTI-TENANT (assessorias / white-label)
+-- Override das definições acima p/ escopo por organização (orgs).
+-- ============================================================
+-- ============ MULTI-TENANT (assessorias / white-label) ============
+create table if not exists public.orgs (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null,
+  name text not null,
+  brand_name text,
+  logo_url text,
+  accent_color text,
+  domain text unique,
+  created_at timestamptz default now()
+);
+alter table public.orgs enable row level security;
+drop policy if exists orgs_select on public.orgs;
+create policy orgs_select on public.orgs for select using (true); -- branding (nome/logo/cor) é público
+
+alter table public.profiles add column if not exists org_id uuid references public.orgs(id) on delete set null;
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check check (role in ('owner','coach','athlete'));
+
+-- org padrão + backfill dos usuários existentes
+insert into public.orgs (slug, name, brand_name, accent_color)
+  values ('default','Assessoria Padrão','TRIBASE','#ff5a3c') on conflict (slug) do nothing;
+update public.profiles set org_id = (select id from public.orgs where slug='default') where org_id is null;
+
+-- helpers (security definer evita recursão de RLS)
+create or replace function public.my_org() returns uuid language sql security definer stable set search_path=public as $$ select org_id from public.profiles where id = auth.uid() $$;
+create or replace function public.my_role() returns text language sql security definer stable set search_path=public as $$ select role from public.profiles where id = auth.uid() $$;
+
+-- profiles_select: próprio + meus atletas + (dono enxerga a própria org)
+drop policy if exists profiles_select on public.profiles;
+create policy profiles_select on public.profiles for select using (
+  id = auth.uid()
+  or coach_id = auth.uid()
+  or (public.my_role() = 'owner' and org_id is not null and org_id = public.my_org())
+);
+
+-- pending_athletes: ESCOPADO à org (isolamento entre assessorias)
+create or replace function public.pending_athletes()
+returns table (id uuid, email text, full_name text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
+begin
+  if (select pr.role from public.profiles pr where pr.id = auth.uid()) not in ('coach','owner') then
+    raise exception 'Apenas treinadores/donos';
+  end if;
+  return query
+    select p.id, p.email, p.full_name, p.created_at
+    from public.profiles p
+    where p.role = 'athlete' and p.coach_id is null and p.org_id = public.my_org()
+    order by p.created_at desc;
+end; $$;
+
+-- link_athlete: só dentro da MESMA org
+create or replace function public.link_athlete(athlete_email text)
+returns public.profiles language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); my_role text; my_o uuid; target public.profiles;
+begin
+  select role, org_id into my_role, my_o from public.profiles where id = me;
+  if my_role not in ('coach','owner') then raise exception 'Apenas treinadores podem vincular atletas'; end if;
+  update public.profiles set coach_id = me, role = 'athlete'
+   where lower(email) = lower(athlete_email) and id <> me and org_id = my_o
+  returning * into target;
+  if target.id is null then raise exception 'Nenhum atleta com esse email nesta assessoria. Peça para ele se cadastrar primeiro.'; end if;
+  return target;
+end; $$;
+
+-- handle_new_user: define org_id (via metadata org_slug, senão a org padrão)
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare o uuid;
+begin
+  select id into o from public.orgs where slug = coalesce(new.raw_user_meta_data->>'org_slug','default');
+  if o is null then select id into o from public.orgs where slug='default'; end if;
+  insert into public.profiles (id, email, full_name, org_id)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email), o)
+  on conflict (id) do nothing;
+  return new;
+end; $$;
