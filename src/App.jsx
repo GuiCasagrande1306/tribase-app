@@ -191,6 +191,7 @@ const demoApi = {
   linkAthlete: async () => _ok,
   listAthletes: async () => demoAthletes.slice(),
   pendingAthletes: async () => [{ id: "demo-pend", email: "novo.aluno@email.com", full_name: "Novo Aluno", created_at: _diso(0) }],
+  unlinkAthlete: async (athleteId) => { demoAthletes = demoAthletes.filter((a) => a.id !== athleteId); return _ok; },
   updateProfile: async (id, fields) => { const p = demoAthletes.find((a) => a.id === id); if (p) Object.assign(p, fields); return _ok; },
   listWorkouts: async (athleteId) => demoWorkouts.filter((w) => w.athlete_id === athleteId).sort((a, b) => a.date.localeCompare(b.date)).map(mapW),
   addWorkout: async (w) => { demoWorkouts.push(_row(w)); return _ok; },
@@ -212,6 +213,7 @@ const supaApi = {
   listAthletes: async (coachId) =>
     (await supabase.from("profiles").select("*").eq("coach_id", coachId).order("full_name")).data || [],
   pendingAthletes: async () => (await supabase.rpc("pending_athletes")).data || [],
+  unlinkAthlete: async (athleteId) => supabase.rpc("unlink_athlete", { p_athlete: athleteId }),
   updateProfile: async (id, fields) => supabase.from("profiles").update(fields).eq("id", id),
   listWorkouts: async (athleteId) => {
     const { data } = await supabase.from("workouts").select("*").eq("athlete_id", athleteId).order("date");
@@ -661,9 +663,68 @@ function NewWorkoutForm({ coachId, athleteId, onAdded }) {
   );
 }
 
+function EditWorkoutModal({ w, onClose, onSaved, onDelete }) {
+  const [f, setF] = useState({
+    date: w.date, discipline: w.discipline, type: w.type, durationMin: w.durationMin || "",
+    distance: w.distance || "", distUnit: w.distUnit || "km", target: w.target || "",
+    notes: w.notes || "", status: w.status, rpe: w.rpe || "",
+  });
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!f.type.trim()) return;
+    setBusy(true);
+    await api.updateWorkout(w.id, {
+      date: f.date, discipline: f.discipline, type: f.type.trim(),
+      duration_min: Number(f.durationMin) || 0, distance: Number(f.distance) || 0, dist_unit: f.distUnit,
+      target: f.target.trim(), notes: f.notes.trim(), status: f.status,
+      rpe: f.status === "concluído" ? (Number(f.rpe) || null) : null,
+    });
+    setBusy(false); onSaved && onSaved();
+  };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(5,8,16,0.72)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="rise" style={{ width: "100%", maxWidth: 560, maxHeight: "88vh", overflow: "auto", background: PANEL, border: `1px solid ${LINE}`, borderRadius: 18, padding: 22 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <SectionTitle>Editar treino</SectionTitle>
+          <button onClick={onClose} style={btn.icon} title="fechar"><X size={16} /></button>
+        </div>
+        <div style={grid2}>
+          <Field label="Data"><input type="date" style={inp.base} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
+          <Field label="Modalidade">
+            <select style={inp.base} value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })}>
+              {DISCIPLINES.map((d) => <option key={d}>{d}</option>)}
+            </select>
+          </Field>
+          <Field label="Tipo de sessão"><input style={inp.base} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} /></Field>
+          <Field label="Duração (min)"><input type="number" style={inp.base} value={f.durationMin} onChange={(e) => setF({ ...f, durationMin: e.target.value })} /></Field>
+          <Field label="Distância">
+            <div style={{ display: "flex", gap: 8 }}>
+              <input type="number" style={{ ...inp.base, flex: 1 }} value={f.distance} onChange={(e) => setF({ ...f, distance: e.target.value })} />
+              <select style={{ ...inp.base, width: 78 }} value={f.distUnit} onChange={(e) => setF({ ...f, distUnit: e.target.value })}><option value="km">km</option><option value="m">m</option></select>
+            </div>
+          </Field>
+          <Field label="Alvo (pace/zona)"><input style={inp.base} value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} /></Field>
+          <Field label="Status">
+            <select style={inp.base} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}><option value="planejado">planejado</option><option value="concluído">concluído</option></select>
+          </Field>
+          {f.status === "concluído" && (
+            <Field label="RPE (1-10)"><input type="number" min="1" max="10" style={inp.base} value={f.rpe} onChange={(e) => setF({ ...f, rpe: e.target.value })} /></Field>
+          )}
+        </div>
+        <Field label="Observações (o atleta vê)"><input style={inp.base} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="ex.: foco na técnica, nutrição a cada 30'…" /></Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <button disabled={busy} onClick={save} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}><Check size={16} /> {busy ? "salvando…" : "Salvar"}</button>
+          {onDelete && <button onClick={() => onDelete(w.id)} style={{ ...btn.icon, marginLeft: "auto" }} title="excluir treino"><Trash2 size={15} /></button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ManageAthlete({ coachId, athlete, onBack }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editId, setEditId] = useState(null);
   const load = useCallback(async () => {
     if (!athlete) return;
     setLoading(true);
@@ -672,6 +733,12 @@ function ManageAthlete({ coachId, athlete, onBack }) {
   }, [athlete]);
   useEffect(() => { load(); }, [load]);
   const delW = async (id) => { await api.deleteWorkout(id); await load(); };
+  const removeAthlete = async () => {
+    if (!window.confirm(`Remover ${athlete.full_name || athlete.email} do seu painel? A conta e o histórico do atleta são mantidos — você pode vinculá-lo de novo depois.`)) return;
+    await api.unlinkAthlete(athlete.id);
+    onBack();
+  };
+  const editing = workouts.find((w) => w.id === editId) || null;
   if (!athlete) return null;
   return (
     <Frame title={athlete.full_name || athlete.email} subtitle="Gerenciar treinos" onExit={onBack} exitLabel="voltar" backIcon>
@@ -680,7 +747,28 @@ function ManageAthlete({ coachId, athlete, onBack }) {
       <CoachPlanBrief athlete={athlete} workouts={workouts} />
       <BulkPlanImport coachId={coachId} athlete={athlete} onDone={load} />
       <NewWorkoutForm coachId={coachId} athleteId={athlete.id} onAdded={load} />
-      {loading ? <Empty>carregando…</Empty> : <WorkoutList workouts={workouts} onDelete={delW} coach />}
+      {loading ? <Empty>carregando…</Empty> : (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 2px 8px" }}>
+            <SectionTitle>Treinos <span style={{ color: MUTE, fontWeight: 400, fontSize: 11.5 }}>· toque para editar</span></SectionTitle>
+          </div>
+          <WorkoutList workouts={workouts} onDelete={delW} onOpen={setEditId} coach />
+        </>
+      )}
+      <div style={{ ...card.base, marginTop: 18, border: `1px solid rgba(255,90,60,0.3)` }}>
+        <SectionTitle>Remover atleta</SectionTitle>
+        <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 12 }}>
+          Tira o atleta do seu painel (desvincula). A conta e o histórico dele continuam; dá pra vincular de novo depois.
+        </p>
+        <button onClick={removeAthlete} style={{ ...btn.outline, borderColor: "rgba(255,90,60,0.5)", color: "#ff8a73" }}>
+          <Trash2 size={15} /> Remover atleta do painel
+        </button>
+      </div>
+      {editing && (
+        <EditWorkoutModal w={editing} onClose={() => setEditId(null)}
+          onSaved={async () => { await load(); setEditId(null); }}
+          onDelete={async (id) => { await delW(id); setEditId(null); }} />
+      )}
     </Frame>
   );
 }
@@ -1273,7 +1361,7 @@ function ExportPanel({ workouts, profile }) {
 }
 
 /* ================= listas / linhas ================= */
-function WorkoutList({ workouts, onToggle, onRpe, onDelete, coach }) {
+function WorkoutList({ workouts, onToggle, onRpe, onDelete, onOpen, coach }) {
   const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
   const groups = {};
   sorted.forEach((w) => { const k = weekStart(w.date).toISOString().slice(0, 10); (groups[k] = groups[k] || []).push(w); });
@@ -1285,7 +1373,7 @@ function WorkoutList({ workouts, onToggle, onRpe, onDelete, coach }) {
         <div key={k}>
           <div className="mono" style={{ fontSize: 11.5, color: MUTE, marginBottom: 8, letterSpacing: 0.5 }}>SEMANA DE {dm(toDate(k))}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {groups[k].map((w) => <WorkoutRow key={w.id} w={w} onToggle={onToggle} onRpe={onRpe} onDelete={onDelete} coach={coach} />)}
+            {groups[k].map((w) => <WorkoutRow key={w.id} w={w} onToggle={onToggle} onRpe={onRpe} onDelete={onDelete} onOpen={onOpen} coach={coach} />)}
           </div>
         </div>
       ))}

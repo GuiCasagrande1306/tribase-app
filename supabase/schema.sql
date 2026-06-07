@@ -114,6 +114,20 @@ begin
     order by p.created_at desc;
 end; $$;
 
+-- ---------- RPC: remover atleta do painel (desvincular) ----------
+-- SECURITY DEFINER — só o treinador dono pode desvincular o próprio atleta.
+-- Mantém a conta e o histórico do atleta; só corta o vínculo (e o coach_id dos treinos).
+create or replace function public.unlink_athlete(p_athlete uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid();
+begin
+  if (select role from public.profiles where id = me) is distinct from 'coach' then
+    raise exception 'Apenas treinadores podem remover atletas';
+  end if;
+  update public.profiles set coach_id = null where id = p_athlete and coach_id = me;
+  update public.workouts  set coach_id = null where athlete_id = p_athlete and coach_id = me;
+end; $$;
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
