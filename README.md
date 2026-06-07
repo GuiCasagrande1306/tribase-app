@@ -1,8 +1,10 @@
 # TRIBASE — plataforma de treinos de triathlon
 
-> 🚀 **Demo no ar:** https://tribase-app.vercel.app — modo demo (`DEMO=true`), sem login,
-> com alternador Atleta/Treinador. Deploy automático: cada push na branch `main` deste
+> 🚀 **No ar (produção):** https://tribase-app.vercel.app — **login real** (Supabase),
+> com contas e privacidade por atleta. Deploy automático: cada push na branch `main` do
 > repositório (`GuiCasagrande1306/tribase-app`) publica na Vercel.
+> Para rodar local: copie `.env.example` → `.env` com a URL e a anon key do Supabase
+> (`DEMO=false` em `src/App.jsx`). Para uma demo sem backend, use `DEMO=true`.
 
 App de treinos com **login real** e **privacidade por atleta** (Supabase + Row Level
 Security). Treinador cadastra atletas e sobe treinos; cada atleta acessa apenas os
