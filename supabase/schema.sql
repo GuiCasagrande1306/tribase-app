@@ -97,6 +97,23 @@ begin
   return target;
 end; $$;
 
+-- ---------- RPC: atletas pendentes (cadastrados, ainda sem treinador) ----------
+-- SECURITY DEFINER (ignora RLS) — só treinadores podem chamar.
+create or replace function public.pending_athletes()
+returns table (id uuid, email text, full_name text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
+begin
+  if (select pr.role from public.profiles pr where pr.id = auth.uid()) is distinct from 'coach' then
+    raise exception 'Apenas treinadores podem ver atletas pendentes';
+  end if;
+  return query
+    select p.id, p.email, p.full_name, p.created_at
+    from public.profiles p
+    where p.role = 'athlete' and p.coach_id is null
+    order by p.created_at desc;
+end; $$;
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================

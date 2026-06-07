@@ -190,6 +190,7 @@ const demoApi = {
   becomeCoach: async () => _ok,
   linkAthlete: async () => _ok,
   listAthletes: async () => demoAthletes.slice(),
+  pendingAthletes: async () => [{ id: "demo-pend", email: "novo.aluno@email.com", full_name: "Novo Aluno", created_at: _diso(0) }],
   updateProfile: async (id, fields) => { const p = demoAthletes.find((a) => a.id === id); if (p) Object.assign(p, fields); return _ok; },
   listWorkouts: async (athleteId) => demoWorkouts.filter((w) => w.athlete_id === athleteId).sort((a, b) => a.date.localeCompare(b.date)).map(mapW),
   addWorkout: async (w) => { demoWorkouts.push(_row(w)); return _ok; },
@@ -210,6 +211,7 @@ const supaApi = {
   linkAthlete: async (email) => supabase.rpc("link_athlete", { athlete_email: email }),
   listAthletes: async (coachId) =>
     (await supabase.from("profiles").select("*").eq("coach_id", coachId).order("full_name")).data || [],
+  pendingAthletes: async () => (await supabase.rpc("pending_athletes")).data || [],
   updateProfile: async (id, fields) => supabase.from("profiles").update(fields).eq("id", id),
   listWorkouts: async (athleteId) => {
     const { data } = await supabase.from("workouts").select("*").eq("athlete_id", athleteId).order("date");
@@ -417,6 +419,7 @@ function athleteStats(workouts, athlete) {
 }
 function CoachArea({ profile, onLogout }) {
   const [athletes, setAthletes] = useState([]);
+  const [pending, setPending] = useState([]);
   const [stats, setStats] = useState({});
   const [manageId, setManageId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -425,6 +428,7 @@ function CoachArea({ profile, onLogout }) {
     setLoading(true);
     const a = await api.listAthletes(profile.id);
     setAthletes(a);
+    setPending(await api.pendingAthletes());
     const s = {};
     for (const at of a) s[at.id] = athleteStats(await api.listWorkouts(at.id), at);
     setStats(s);
@@ -437,17 +441,18 @@ function CoachArea({ profile, onLogout }) {
     return <ManageAthlete coachId={profile.id} athlete={athletes.find((a) => a.id === manageId)}
       onBack={() => { setManageId(null); load(); }} />;
   }
-  return <CoachHome profile={profile} athletes={athletes} stats={stats} loading={loading}
+  return <CoachHome profile={profile} athletes={athletes} pending={pending} stats={stats} loading={loading}
     reload={load} onManage={setManageId} onLogout={onLogout} />;
 }
 
 function raceColor(days) { return days == null ? MUTE : days <= 21 ? "#ff5a3c" : days <= 56 ? "#f5a524" : "#c084fc"; }
 export function adherColor(p) { return p == null ? MUTE : p >= 80 ? "#a3e635" : p >= 50 ? "#f5a524" : "#ff5a3c"; }
 
-function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogout }) {
+function CoachHome({ profile, athletes, pending = [], stats, loading, reload, onManage, onLogout }) {
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [linkingId, setLinkingId] = useState(null);
   const link = async () => {
     if (!email.trim()) return;
     setBusy(true); setMsg(null);
@@ -455,6 +460,13 @@ function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogo
     if (error) setMsg({ ok: false, t: error.message });
     else { setMsg({ ok: true, t: "Atleta vinculado!" }); setEmail(""); await reload(); }
     setBusy(false);
+  };
+  const linkPending = async (p) => {
+    setLinkingId(p.id); setMsg(null);
+    const { error } = await api.linkAthlete(p.email);
+    if (error) setMsg({ ok: false, t: error.message });
+    else await reload();
+    setLinkingId(null);
   };
   const list = athletes.map((a) => ({ a, s: stats[a.id] || {} }));
   const sorted = [...list].sort((x, y) =>
@@ -476,7 +488,38 @@ function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogo
             <Stat label="Precisam de atenção" value={attention} unit="atleta(s)" color={attention ? "#ff5a3c" : "#a3e635"} icon={AlertTriangle} />
           </div>
 
-          {athletes.length === 0 ? <Empty>Nenhum atleta vinculado ainda. Use "Vincular atleta" abaixo.</Empty> : (
+          {pending.length > 0 && (
+            <div style={{ ...card.base, marginBottom: 18, border: `1px solid rgba(34,211,238,0.4)` }}>
+              <SectionTitle>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <Mail size={15} color="#22d3ee" /> Novos alunos aguardando vínculo
+                  <Badge c="#22d3ee">{pending.length}</Badge>
+                </span>
+              </SectionTitle>
+              <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 12 }}>
+                Criaram a conta e ainda não estão no seu painel. Clique em <b style={{ color: TEXT }}>Vincular</b> para adicioná-los.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {pending.map((p) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 12, flexWrap: "wrap" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(34,211,238,0.12)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      <Users size={16} color="#22d3ee" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="disp" style={{ fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.full_name || p.email}</div>
+                      <div className="mono" style={{ fontSize: 11.5, color: MUTE, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.email}{p.created_at ? ` · ${dm(toDate(String(p.created_at).slice(0, 10)))}` : ""}</div>
+                    </div>
+                    <button disabled={linkingId === p.id} onClick={() => linkPending(p)} style={{ ...btn.solid, opacity: linkingId === p.id ? 0.6 : 1 }}>
+                      <Plus size={16} /> {linkingId === p.id ? "vinculando…" : "Vincular"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {msg && <div style={{ fontSize: 12.5, marginTop: 8, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
+            </div>
+          )}
+
+          {athletes.length === 0 && pending.length === 0 ? <Empty>Nenhum atleta ainda. Quando um aluno criar a conta, ele aparece aqui pra você vincular.</Empty> : athletes.length === 0 ? null : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
               {sorted.map(({ a, s }) => (
                 <button key={a.id} onClick={() => onManage(a.id)} style={{
