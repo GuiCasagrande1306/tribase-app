@@ -116,6 +116,13 @@ drop policy if exists profiles_update_coach on public.profiles;
 create policy profiles_update_coach on public.profiles for update
   using ( coach_id = auth.uid() ) with check ( coach_id = auth.uid() );
 
+-- ENDURECIMENTO: o usuário NÃO pode alterar o próprio role/coach_id direto.
+-- A RLS é por linha, então restringimos por COLUNA: só estas colunas podem ser
+-- atualizadas pelo app. role/coach_id mudam apenas via become_coach()/link_athlete()
+-- (SECURITY DEFINER, que rodam como dono e ignoram esta restrição).
+revoke update on public.profiles from anon, authenticated;
+grant update (email, full_name, race, race_date, goal) on public.profiles to authenticated;
+
 -- WORKOUTS: atleta vê os seus; treinador vê os dos seus atletas
 drop policy if exists workouts_select on public.workouts;
 create policy workouts_select on public.workouts for select

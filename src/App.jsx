@@ -106,7 +106,7 @@ function mapW(r) {
    Com DEMO=true o app abre direto como atleta, com dados de exemplo em memória —
    sem Supabase, sem login. Para ligar o backend real: troque para false e
    configure o .env (ver README). */
-export const DEMO = true;
+export const DEMO = false;
 
 const _diso = (n) => addDays(todayISO(), n); // datas de exemplo relativas a hoje
 const demoCoachProfile = {
