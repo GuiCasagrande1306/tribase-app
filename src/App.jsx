@@ -417,12 +417,25 @@ function athleteStats(workouts, athlete) {
   const needsAttention = overdue >= 2 || !hasPlan || (daysSinceLast != null && daysSinceLast > 10);
   return { total: workouts.length, done: done.length, weekDone, weekTotal: thisWeek.length, overdue, adher, daysSinceLast, recentImport, daysToRace, hasPlan, needsAttention };
 }
+function ViewSwitch({ view, setView }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+      {[["athletes", "Meus atletas", Users], ["me", "Meu treino", Activity]].map(([k, l, Icon]) => (
+        <button key={k} onClick={() => setView(k)} style={{
+          display: "flex", alignItems: "center", gap: 7, padding: "9px 15px", borderRadius: 11, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+          border: `1px solid ${view === k ? ACCENT : LINE}`, background: view === k ? "rgba(255,90,60,0.12)" : PANEL, color: view === k ? "#ffd9cf" : MUTE,
+        }}><Icon size={15} /> {l}</button>
+      ))}
+    </div>
+  );
+}
 function CoachArea({ profile, onLogout }) {
   const [athletes, setAthletes] = useState([]);
   const [pending, setPending] = useState([]);
   const [stats, setStats] = useState({});
   const [manageId, setManageId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("athletes");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -441,14 +454,18 @@ function CoachArea({ profile, onLogout }) {
     return <ManageAthlete coachId={profile.id} athlete={athletes.find((a) => a.id === manageId)}
       onBack={() => { setManageId(null); load(); }} />;
   }
+  const sw = <ViewSwitch view={view} setView={setView} />;
+  if (view === "me") {
+    return <AthleteArea profile={profile} onLogout={onLogout} selfManage viewSwitch={sw} />;
+  }
   return <CoachHome profile={profile} athletes={athletes} pending={pending} stats={stats} loading={loading}
-    reload={load} onManage={setManageId} onLogout={onLogout} />;
+    reload={load} onManage={setManageId} onLogout={onLogout} viewSwitch={sw} />;
 }
 
 function raceColor(days) { return days == null ? MUTE : days <= 21 ? "#ff5a3c" : days <= 56 ? "#f5a524" : "#c084fc"; }
 export function adherColor(p) { return p == null ? MUTE : p >= 80 ? "#a3e635" : p >= 50 ? "#f5a524" : "#ff5a3c"; }
 
-function CoachHome({ profile, athletes, pending = [], stats, loading, reload, onManage, onLogout }) {
+function CoachHome({ profile, athletes, pending = [], stats, loading, reload, onManage, onLogout, viewSwitch = null }) {
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -479,6 +496,7 @@ function CoachHome({ profile, athletes, pending = [], stats, loading, reload, on
 
   return (
     <Frame title="Painel do treinador" subtitle={`${athletes.length} atleta(s)`} onExit={onLogout} exitLabel="sair" logout>
+      {viewSwitch}
       {loading ? <Empty>carregando…</Empty> : (
         <div className="rise">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 18 }}>
@@ -586,13 +604,66 @@ function Badge({ c, icon: Icon, children }) {
   );
 }
 
+function RaceDataCard({ athlete, onSaved }) {
+  const [info, setInfo] = useState({ race: athlete?.race || "", race_date: athlete?.race_date || "", goal: athlete?.goal || "" });
+  const [saved, setSaved] = useState(false);
+  const save = async () => { await api.updateProfile(athlete.id, info); setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved && onSaved(); };
+  return (
+    <div style={{ ...card.base, marginBottom: 16 }}>
+      <SectionTitle>Dados da prova</SectionTitle>
+      <div style={grid2}>
+        <Field label="Prova"><input style={inp.base} value={info.race} onChange={(e) => setInfo({ ...info, race: e.target.value })} /></Field>
+        <Field label="Data"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
+        <Field label="Tempo-objetivo"><input style={inp.base} value={info.goal} onChange={(e) => setInfo({ ...info, goal: e.target.value })} placeholder="ex.: 6h45" /></Field>
+      </div>
+      <button onClick={save} style={btn.outline}>{saved ? "salvo!" : "Salvar dados"}</button>
+    </div>
+  );
+}
+function NewWorkoutForm({ coachId, athleteId, onAdded }) {
+  const blank = { date: todayISO(), discipline: "Corrida", type: "", durationMin: "", distance: "", distUnit: "km", target: "", notes: "" };
+  const [f, setF] = useState(blank);
+  const add = async () => {
+    if (!f.type.trim()) return;
+    await api.addWorkout({
+      athlete_id: athleteId, coach_id: coachId, date: f.date, discipline: f.discipline,
+      type: f.type.trim(), duration_min: Number(f.durationMin) || 0, distance: Number(f.distance) || 0,
+      dist_unit: f.distUnit, target: f.target.trim(), notes: f.notes.trim(), status: "planejado",
+    });
+    setF({ ...blank, discipline: f.discipline, date: f.date });
+    onAdded && onAdded();
+  };
+  return (
+    <div style={{ ...card.base, marginBottom: 18 }}>
+      <SectionTitle>Novo treino</SectionTitle>
+      <div style={grid2}>
+        <Field label="Data"><input type="date" style={inp.base} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
+        <Field label="Modalidade">
+          <select style={inp.base} value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })}>
+            {DISCIPLINES.map((d) => <option key={d}>{d}</option>)}
+          </select>
+        </Field>
+        <Field label="Tipo de sessão"><input style={inp.base} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} placeholder="ex.: Limiar 3×6'" /></Field>
+        <Field label="Duração (min)"><input style={inp.base} type="number" value={f.durationMin} onChange={(e) => setF({ ...f, durationMin: e.target.value })} /></Field>
+        <Field label="Distância">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input style={{ ...inp.base, flex: 1 }} type="number" value={f.distance} onChange={(e) => setF({ ...f, distance: e.target.value })} />
+            <select style={{ ...inp.base, width: 78 }} value={f.distUnit} onChange={(e) => setF({ ...f, distUnit: e.target.value })}>
+              <option value="km">km</option><option value="m">m</option>
+            </select>
+          </div>
+        </Field>
+        <Field label="Alvo (pace/zona)"><input style={inp.base} value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} placeholder="ex.: 4:43/km" /></Field>
+      </div>
+      <Field label="Observações"><input style={inp.base} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
+      <button onClick={add} style={{ ...btn.solid, marginTop: 4 }}><Plus size={16} /> Adicionar treino</button>
+    </div>
+  );
+}
+
 function ManageAthlete({ coachId, athlete, onBack }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const blank = { date: todayISO(), discipline: "Corrida", type: "", durationMin: "", distance: "", distUnit: "km", target: "", notes: "" };
-  const [f, setF] = useState(blank);
-  const [info, setInfo] = useState({ race: athlete?.race || "", race_date: athlete?.race_date || "", goal: athlete?.goal || "" });
-
   const load = useCallback(async () => {
     if (!athlete) return;
     setLoading(true);
@@ -600,64 +671,15 @@ function ManageAthlete({ coachId, athlete, onBack }) {
     setLoading(false);
   }, [athlete]);
   useEffect(() => { load(); }, [load]);
-
-  const addW = async () => {
-    if (!f.type.trim() || !athlete) return;
-    await api.addWorkout({
-      athlete_id: athlete.id, coach_id: coachId, date: f.date, discipline: f.discipline,
-      type: f.type.trim(), duration_min: Number(f.durationMin) || 0, distance: Number(f.distance) || 0,
-      dist_unit: f.distUnit, target: f.target.trim(), notes: f.notes.trim(), status: "planejado",
-    });
-    setF({ ...blank, discipline: f.discipline, date: f.date });
-    await load();
-  };
   const delW = async (id) => { await api.deleteWorkout(id); await load(); };
-  const saveInfo = async () => { await api.updateProfile(athlete.id, info); };
-
   if (!athlete) return null;
   return (
     <Frame title={athlete.full_name || athlete.email} subtitle="Gerenciar treinos" onExit={onBack} exitLabel="voltar" backIcon>
-      <div style={{ ...card.base, marginBottom: 16 }}>
-        <SectionTitle>Dados da prova</SectionTitle>
-        <div style={grid2}>
-          <Field label="Prova"><input style={inp.base} value={info.race} onChange={(e) => setInfo({ ...info, race: e.target.value })} /></Field>
-          <Field label="Data"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
-          <Field label="Tempo-objetivo"><input style={inp.base} value={info.goal} onChange={(e) => setInfo({ ...info, goal: e.target.value })} placeholder="ex.: 6h45" /></Field>
-        </div>
-        <button onClick={saveInfo} style={btn.outline}>Salvar dados</button>
-      </div>
-
+      <RaceDataCard athlete={athlete} />
       {!loading && <Suspense fallback={<Empty>carregando…</Empty>}><PlanVsActual workouts={workouts} title="Planejado × cumprido do atleta" /></Suspense>}
-
       <CoachPlanBrief athlete={athlete} workouts={workouts} />
-
       <BulkPlanImport coachId={coachId} athlete={athlete} onDone={load} />
-
-      <div style={{ ...card.base, marginBottom: 18 }}>
-        <SectionTitle>Novo treino</SectionTitle>
-        <div style={grid2}>
-          <Field label="Data"><input type="date" style={inp.base} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
-          <Field label="Modalidade">
-            <select style={inp.base} value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })}>
-              {DISCIPLINES.map((d) => <option key={d}>{d}</option>)}
-            </select>
-          </Field>
-          <Field label="Tipo de sessão"><input style={inp.base} value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })} placeholder="ex.: Limiar 3×6'" /></Field>
-          <Field label="Duração (min)"><input style={inp.base} type="number" value={f.durationMin} onChange={(e) => setF({ ...f, durationMin: e.target.value })} /></Field>
-          <Field label="Distância">
-            <div style={{ display: "flex", gap: 8 }}>
-              <input style={{ ...inp.base, flex: 1 }} type="number" value={f.distance} onChange={(e) => setF({ ...f, distance: e.target.value })} />
-              <select style={{ ...inp.base, width: 78 }} value={f.distUnit} onChange={(e) => setF({ ...f, distUnit: e.target.value })}>
-                <option value="km">km</option><option value="m">m</option>
-              </select>
-            </div>
-          </Field>
-          <Field label="Alvo (pace/zona)"><input style={inp.base} value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} placeholder="ex.: 4:43/km" /></Field>
-        </div>
-        <Field label="Observações"><input style={inp.base} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
-        <button onClick={addW} style={{ ...btn.solid, marginTop: 4 }}><Plus size={16} /> Adicionar treino</button>
-      </div>
-
+      <NewWorkoutForm coachId={coachId} athleteId={athlete.id} onAdded={load} />
       {loading ? <Empty>carregando…</Empty> : <WorkoutList workouts={workouts} onDelete={delW} coach />}
     </Frame>
   );
@@ -860,7 +882,7 @@ function CoachPlanBrief({ athlete, workouts }) {
 }
 
 /* ================= Athlete ================= */
-function AthleteArea({ profile, onLogout }) {
+function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
@@ -882,11 +904,15 @@ function AthleteArea({ profile, onLogout }) {
   const setRpe = async (id, rpe) => { await api.updateWorkout(id, { rpe }); await load(); };
   const del = async (id) => { await api.deleteWorkout(id); await load(); };
   const detail = workouts.find((w) => w.id === detailId) || null;
+  const subtitle = selfManage
+    ? `Meu treino${profile.race ? " · " + profile.race : ""}${profile.goal ? " · alvo " + profile.goal : ""}`
+    : `${profile.race || "Triathlon"}${profile.goal ? " · alvo " + profile.goal : ""}`;
 
   return (
-    <Frame title={profile.full_name || profile.email} subtitle={`${profile.race || "Triathlon"}${profile.goal ? " · alvo " + profile.goal : ""}`}
+    <Frame title={profile.full_name || profile.email} subtitle={subtitle}
       onExit={onLogout} exitLabel="sair" logout>
-      <Tabs tab={tab} setTab={setTab} />
+      {viewSwitch}
+      <Tabs tab={tab} setTab={setTab} selfManage={selfManage} />
       {loading ? <Empty>carregando…</Empty> : (
         <Suspense fallback={<Empty>carregando gráficos…</Empty>}>
           {tab === "overview" && <Overview workouts={workouts} profile={profile} onOpen={setDetailId} />}
@@ -895,6 +921,13 @@ function AthleteArea({ profile, onLogout }) {
           {tab === "reports" && <Reports workouts={workouts} />}
           {tab === "import" && <ImportPanel profile={profile} onImported={async () => { await load(); setTab("reports"); }} />}
           {tab === "export" && <ExportPanel workouts={workouts} profile={profile} />}
+          {tab === "plano" && selfManage && (
+            <div className="rise">
+              <RaceDataCard athlete={profile} onSaved={load} />
+              <NewWorkoutForm coachId={profile.id} athleteId={profile.id} onAdded={load} />
+              <BulkPlanImport coachId={profile.id} athlete={profile} onDone={load} />
+            </div>
+          )}
         </Suspense>
       )}
       {detail && (
@@ -906,8 +939,9 @@ function AthleteArea({ profile, onLogout }) {
   );
 }
 
-function Tabs({ tab, setTab }) {
+function Tabs({ tab, setTab, selfManage = false }) {
   const items = [["overview", "Visão geral", Activity], ["calendar", "Calendário", Calendar], ["evolution", "Evolução", TrendingUp], ["reports", "Relatórios", BarChart3], ["import", "Importar", Upload], ["export", "Exportar", Download]];
+  if (selfManage) items.splice(1, 0, ["plano", "Meu plano", Plus]);
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
       {items.map(([k, label, Icon]) => (
