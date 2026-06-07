@@ -1,5 +1,9 @@
 # TRIBASE — plataforma de treinos de triathlon
 
+> 🚀 **Demo no ar:** https://tribase-app.vercel.app — modo demo (`DEMO=true`), sem login,
+> com alternador Atleta/Treinador. Deploy automático: cada push na branch `main` deste
+> repositório (`GuiCasagrande1306/tribase-app`) publica na Vercel.
+
 App de treinos com **login real** e **privacidade por atleta** (Supabase + Row Level
 Security). Treinador cadastra atletas e sobe treinos; cada atleta acessa apenas os
 seus, com visão geral, **calendário em grade semanal**, relatórios, importação de
