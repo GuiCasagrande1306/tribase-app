@@ -275,6 +275,17 @@ export default function App() {
               <Onboarding profile={profile} onBecomeCoach={async () => { await api.becomeCoach(); await refreshProfile(); }}
                 onLogout={() => supabase.auth.signOut()} />
             )}
+            {session && ready && !profile && (
+              <Center>
+                <div style={{ textAlign: "center", maxWidth: 340, padding: 20 }}>
+                  <div style={{ color: TEXT, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Sessão inválida</div>
+                  <div style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
+                    Não encontramos seu perfil (a conta pode ter sido removida ou a sessão expirou). Entre novamente.
+                  </div>
+                  <button onClick={() => supabase.auth.signOut()} style={btn.solid}><LogOut size={15} /> Sair e voltar ao login</button>
+                </div>
+              </Center>
+            )}
           </>
         )}
       </div>
