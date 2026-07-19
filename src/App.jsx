@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 
 /* ================= tema ================= */
-export const INK = "#0a0e1a", PANEL = "#0f1626", PANEL2 = "#141d31", LINE = "#1e2a44";
-export const TEXT = "#e7ecf5", MUTE = "#8a98b4", ACCENT = "#ff5a3c";
+export const INK = "#121114", PANEL = "#1a191e", PANEL2 = "#232128", LINE = "#302e37";
+export const TEXT = "#f3f1ef", MUTE = "#9c97a3", ACCENT = "#ff5a3c";
 export const DISC = {
   "Natação": { c: "#22d3ee", icon: Waves },
   "Pedal": { c: "#f5a524", icon: Bike },
@@ -29,12 +29,13 @@ const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-html,body{margin:0;background:#0a0e1a}
+html,body{margin:0;background:#121114}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 *{-webkit-tap-highlight-color:transparent}
 button{touch-action:manipulation}
-::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#23314f;border-radius:9px}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#302e37;border-radius:9px}
 input,select,textarea,button{font-family:inherit}
-.disp{font-family:'Archivo',system-ui,sans-serif}.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.disp{font-family:'Archivo',system-ui,sans-serif;letter-spacing:-0.02em}.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}.rise{animation:rise .5s cubic-bezier(.2,.7,.3,1) both}
 `;
 
@@ -1948,7 +1949,7 @@ function Frame({ title, subtitle, onExit, exitLabel, logout, backIcon, children 
           <Logo compact={narrow} />
           {!narrow && <div style={{ width: 1, height: 26, background: LINE, flexShrink: 0 }} />}
           <div style={{ minWidth: 0 }}>
-            <div className="disp" style={{ fontWeight: 800, fontSize: narrow ? 16 : 19, color: TEXT, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+            <div className="disp" style={{ fontWeight: 900, fontSize: narrow ? 19 : 23, color: TEXT, lineHeight: 1.05, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
             {subtitle && <div style={{ color: MUTE, fontSize: 12.5, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{subtitle}</div>}
           </div>
         </div>
@@ -1971,8 +1972,8 @@ function Stat({ label, value, unit, color, icon: Icon }) {
         <span style={{ fontSize: 11.5, color: MUTE, textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</span>
         {Icon && <Icon size={15} color={color} />}
       </div>
-      <div className="disp" style={{ fontWeight: 900, fontSize: 30, color, marginTop: 6, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: MUTE, marginTop: 3 }}>{unit}</div>
+      <div className="disp" style={{ fontWeight: 900, fontSize: 33, color, marginTop: 7, lineHeight: 0.95 }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: MUTE, marginTop: 4 }}>{unit}</div>
     </div>
   );
 }
@@ -1986,15 +1987,15 @@ function Center({ children }) { return <div style={{ display: "grid", placeItems
 
 const shell = {
   root: { minHeight: "100vh", background: INK, color: TEXT, position: "relative", overflow: "hidden", fontFamily: "'Hanken Grotesk', system-ui, sans-serif" },
-  glow1: { position: "absolute", top: -160, right: -120, width: 480, height: 480, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,90,60,0.16), transparent 70%)", filter: "blur(20px)", zIndex: 0 },
-  glow2: { position: "absolute", bottom: -200, left: -140, width: 520, height: 520, borderRadius: "50%", background: "radial-gradient(circle, rgba(34,211,238,0.12), transparent 70%)", filter: "blur(20px)", zIndex: 0 },
+  glow1: { position: "absolute", top: -180, right: -140, width: 520, height: 520, borderRadius: "50%", background: "radial-gradient(circle, rgba(255,90,60,0.14), transparent 70%)", filter: "blur(24px)", zIndex: 0 },
+  glow2: { position: "absolute", bottom: -220, left: -160, width: 560, height: 560, borderRadius: "50%", background: "radial-gradient(circle, rgba(192,132,252,0.08), transparent 70%)", filter: "blur(24px)", zIndex: 0 },
 };
-export const card = { base: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 16, padding: 20 } };
+export const card = { base: { background: PANEL, border: `1px solid ${LINE}`, borderRadius: 18, padding: 20, boxShadow: "0 1px 0 rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.28)" } };
 const grid2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 };
-const inp = { base: { width: "100%", padding: "10px 12px", borderRadius: 10, background: PANEL2, border: `1px solid ${LINE}`, color: TEXT, fontSize: 14, outline: "none" } };
+const inp = { base: { width: "100%", padding: "11px 13px", borderRadius: 12, background: PANEL2, border: `1px solid ${LINE}`, color: TEXT, fontSize: 14, outline: "none" } };
 const btn = {
-  solid: { display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 11, border: "none", cursor: "pointer", background: `linear-gradient(135deg,${ACCENT},#ff7a4c)`, color: "#1a0c07", fontWeight: 700, fontSize: 13.5 },
-  outline: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 14px", borderRadius: 11, cursor: "pointer", background: PANEL2, border: `1px solid ${LINE}`, color: TEXT, fontWeight: 600, fontSize: 13 },
-  ghost: { display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 10, cursor: "pointer", background: "transparent", border: `1px solid ${LINE}`, color: MUTE, fontSize: 12.5 },
-  icon: { width: 30, height: 30, borderRadius: 8, cursor: "pointer", display: "grid", placeItems: "center", background: "transparent", border: `1px solid ${LINE}`, color: MUTE, flexShrink: 0 },
+  solid: { display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 18px", borderRadius: 13, border: "none", cursor: "pointer", background: `linear-gradient(135deg,${ACCENT},#ff7a4c)`, color: "#1a0c07", fontWeight: 700, fontSize: 13.5, boxShadow: "0 6px 18px rgba(255,90,60,0.28)" },
+  outline: { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px 15px", borderRadius: 13, cursor: "pointer", background: PANEL2, border: `1px solid ${LINE}`, color: TEXT, fontWeight: 600, fontSize: 13 },
+  ghost: { display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 13px", borderRadius: 11, cursor: "pointer", background: "transparent", border: `1px solid ${LINE}`, color: MUTE, fontSize: 12.5 },
+  icon: { width: 32, height: 32, borderRadius: 10, cursor: "pointer", display: "grid", placeItems: "center", background: "transparent", border: `1px solid ${LINE}`, color: MUTE, flexShrink: 0 },
 };
