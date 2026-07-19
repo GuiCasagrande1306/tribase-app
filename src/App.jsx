@@ -10,7 +10,7 @@ import {
   Waves, Bike, Footprints, Layers, Dumbbell, Moon, Plus, Trash2, Check,
   ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Mail, Copy, Upload,
   Flame, Trophy, X, Heart, Mountain, Zap, FileText, Gauge, Download, AlertTriangle, CheckCircle2, ChevronRight,
-  TrendingUp, TrendingDown, Sparkles,
+  TrendingUp, TrendingDown, Sparkles, KeyRound,
 } from "lucide-react";
 
 /* ================= tema ================= */
@@ -1896,8 +1896,44 @@ function Logo({ big, compact }) {
     </div>
   );
 }
+function ChangePassword({ onClose }) {
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (pass.length < 6) { setMsg({ ok: false, t: "A senha precisa ter ao menos 6 caracteres." }); return; }
+    if (pass !== pass2) { setMsg({ ok: false, t: "As senhas não conferem." }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pass });
+      if (error) throw error;
+      setMsg({ ok: true, t: "Senha alterada com sucesso!" });
+      setTimeout(() => onClose(), 1000);
+    } catch (e) { setMsg({ ok: false, t: e.message || "Erro ao alterar a senha" }); setBusy(false); }
+  };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", zIndex: 50, padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...card.base, width: "100%", maxWidth: 380 }} className="rise">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <SectionTitle><KeyRound size={15} style={{ marginRight: 6, verticalAlign: "-2px" }} />Trocar senha</SectionTitle>
+          <button onClick={onClose} style={{ ...btn.ghost, padding: 6 }}><X size={16} /></button>
+        </div>
+        <Field label="Nova senha"><input style={inp.base} type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus /></Field>
+        <Field label="Repita a nova senha"><input style={inp.base} type="password" value={pass2}
+          onChange={(e) => setPass2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} /></Field>
+        {msg && <div style={{ fontSize: 12.5, marginTop: 4, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
+        <button disabled={busy} onClick={save} style={{ ...btn.solid, width: "100%", marginTop: 12, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "…" : "Salvar nova senha"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Frame({ title, subtitle, onExit, exitLabel, logout, backIcon, children }) {
   const narrow = useMediaQuery("(max-width: 560px)");
+  const [showPwd, setShowPwd] = useState(false);
   return (
     <div style={{
       maxWidth: 980, margin: "0 auto",
@@ -1912,9 +1948,15 @@ function Frame({ title, subtitle, onExit, exitLabel, logout, backIcon, children 
             {subtitle && <div style={{ color: MUTE, fontSize: 12.5, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{subtitle}</div>}
           </div>
         </div>
-        <button onClick={onExit} style={{ ...btn.ghost, flexShrink: 0 }}>{logout ? <LogOut size={15} /> : <ChevronLeft size={15} />} {exitLabel}</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button onClick={() => setShowPwd(true)} title="Trocar senha" style={{ ...btn.ghost, padding: narrow ? "8px 9px" : "8px 11px" }}>
+            <KeyRound size={15} />{!narrow && " senha"}
+          </button>
+          <button onClick={onExit} style={btn.ghost}>{logout ? <LogOut size={15} /> : <ChevronLeft size={15} />} {exitLabel}</button>
+        </div>
       </div>
       {children}
+      {showPwd && <ChangePassword onClose={() => setShowPwd(false)} />}
     </div>
   );
 }
