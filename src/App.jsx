@@ -232,6 +232,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [ready, setReady] = useState(false);
+  const [recovery, setRecovery] = useState(false);
 
   const refreshProfile = useCallback(async () => {
     const p = await api.myProfile();
@@ -241,7 +242,10 @@ export default function App() {
   useEffect(() => {
     if (DEMO) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (_e === "PASSWORD_RECOVERY") setRecovery(true);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -263,19 +267,20 @@ export default function App() {
           <DemoShell />
         ) : (
           <>
-            {!session && <Auth />}
-            {session && !ready && <Center>carregando…</Center>}
-            {session && ready && profile && profile.role === "coach" && (
+            {recovery && <ResetPassword onDone={() => setRecovery(false)} onCancel={async () => { setRecovery(false); await supabase.auth.signOut(); }} />}
+            {!recovery && !session && <Auth />}
+            {!recovery && session && !ready && <Center>carregando…</Center>}
+            {!recovery && session && ready && profile && profile.role === "coach" && (
               <CoachArea profile={profile} onLogout={() => supabase.auth.signOut()} />
             )}
-            {session && ready && profile && profile.role !== "coach" && profile.coach_id && (
+            {!recovery && session && ready && profile && profile.role !== "coach" && profile.coach_id && (
               <AthleteArea profile={profile} onLogout={() => supabase.auth.signOut()} />
             )}
-            {session && ready && profile && profile.role !== "coach" && !profile.coach_id && (
+            {!recovery && session && ready && profile && profile.role !== "coach" && !profile.coach_id && (
               <Onboarding profile={profile} onBecomeCoach={async () => { await api.becomeCoach(); await refreshProfile(); }}
                 onLogout={() => supabase.auth.signOut()} />
             )}
-            {session && ready && !profile && (
+            {!recovery && session && ready && !profile && (
               <Center>
                 <div style={{ textAlign: "center", maxWidth: 340, padding: 20 }}>
                   <div style={{ color: TEXT, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Sessão inválida</div>
@@ -350,6 +355,17 @@ function Auth() {
     setBusy(false);
   };
 
+  const forgot = async () => {
+    if (!email) { setMsg({ ok: false, t: "Digite seu email acima para receber o link de redefinição." }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      if (error) throw error;
+      setMsg({ ok: true, t: "Enviamos um link de redefinição para seu email. Abra-o para criar uma nova senha." });
+    } catch (e) { setMsg({ ok: false, t: e.message || "Erro ao enviar o email" }); }
+    setBusy(false);
+  };
+
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "70px 22px" }} className="rise">
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Logo big /></div>
@@ -377,10 +393,57 @@ function Auth() {
         <button disabled={busy} onClick={submit} style={{ ...btn.solid, width: "100%", marginTop: 14, opacity: busy ? 0.6 : 1 }}>
           {busy ? "…" : mode === "in" ? "Entrar" : "Criar conta"}
         </button>
+        {mode === "in" && (
+          <button disabled={busy} onClick={forgot} style={{
+            display: "block", margin: "12px auto 0", background: "none", border: "none",
+            color: MUTE, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", opacity: busy ? 0.6 : 1,
+          }}>Esqueci minha senha</button>
+        )}
       </div>
       <p style={{ textAlign: "center", color: MUTE, fontSize: 11.5, marginTop: 18, lineHeight: 1.5 }}>
         Treinador cria a conta e ativa o modo treinador. Atleta cria a conta e compartilha o email com o treinador para ser vinculado.
       </p>
+    </div>
+  );
+}
+
+/* ================= Redefinir senha (vindo do link do email) ================= */
+function ResetPassword({ onDone, onCancel }) {
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (pass.length < 6) { setMsg({ ok: false, t: "A senha precisa ter ao menos 6 caracteres." }); return; }
+    if (pass !== pass2) { setMsg({ ok: false, t: "As senhas não conferem." }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pass });
+      if (error) throw error;
+      setMsg({ ok: true, t: "Senha alterada! Entrando…" });
+      setTimeout(() => onDone(), 900);
+    } catch (e) { setMsg({ ok: false, t: e.message || "Erro ao alterar a senha" }); setBusy(false); }
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: "0 auto", padding: "70px 22px" }} className="rise">
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Logo big /></div>
+      <p style={{ textAlign: "center", color: MUTE, fontSize: 13.5, marginBottom: 26 }}>Defina sua nova senha</p>
+      <div style={card.base}>
+        <Field label="Nova senha"><input style={inp.base} type="password" value={pass}
+          onChange={(e) => setPass(e.target.value)} /></Field>
+        <Field label="Repita a nova senha"><input style={inp.base} type="password" value={pass2}
+          onChange={(e) => setPass2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} /></Field>
+        {msg && <div style={{ fontSize: 12.5, marginTop: 6, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
+        <button disabled={busy} onClick={save} style={{ ...btn.solid, width: "100%", marginTop: 14, opacity: busy ? 0.6 : 1 }}>
+          {busy ? "…" : "Salvar nova senha"}
+        </button>
+        <button disabled={busy} onClick={onCancel} style={{
+          display: "block", margin: "12px auto 0", background: "none", border: "none",
+          color: MUTE, fontSize: 12.5, cursor: "pointer", textDecoration: "underline", opacity: busy ? 0.6 : 1,
+        }}>Cancelar</button>
+      </div>
     </div>
   );
 }
