@@ -275,15 +275,18 @@ begin
   return target;
 end; $$;
 
--- handle_new_user: define org_id (via metadata org_slug, senão a org padrão)
+-- handle_new_user: define org_id + AUTO-VINCULA todo novo cadastro ao (único)
+-- treinador. Modelo de instância única: um professor, todos os demais são alunos
+-- dele automaticamente (sem etapa manual de "vincular por email").
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare o uuid;
+declare o uuid; c uuid;
 begin
   select id into o from public.orgs where slug = coalesce(new.raw_user_meta_data->>'org_slug','default');
   if o is null then select id into o from public.orgs where slug='default'; end if;
-  insert into public.profiles (id, email, full_name, org_id)
-  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email), o)
+  select p.id into c from public.profiles p where p.role = 'coach' order by p.created_at limit 1;
+  insert into public.profiles (id, email, full_name, org_id, coach_id)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email), o, c)
   on conflict (id) do nothing;
   return new;
 end; $$;

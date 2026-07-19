@@ -8,7 +8,7 @@ const Evolution = lazy(() => import("./charts.jsx").then((m) => ({ default: m.Ev
 const PlanVsActual = lazy(() => import("./charts.jsx").then((m) => ({ default: m.PlanVsActual })));
 import {
   Waves, Bike, Footprints, Layers, Dumbbell, Moon, Plus, Trash2, Check,
-  ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Mail, Copy, Upload,
+  ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Copy, Upload,
   Flame, Trophy, X, Heart, Mountain, Zap, FileText, Gauge, Download, AlertTriangle, CheckCircle2, ChevronRight,
   TrendingUp, TrendingDown, Sparkles, KeyRound,
 } from "lucide-react";
@@ -280,8 +280,7 @@ export default function App() {
               <AthleteArea profile={profile} onLogout={() => supabase.auth.signOut()} />
             )}
             {!recovery && session && ready && profile && profile.role !== "coach" && !profile.coach_id && (
-              <Onboarding profile={profile} onBecomeCoach={async () => { await api.becomeCoach(); await refreshProfile(); }}
-                onLogout={() => supabase.auth.signOut()} />
+              <Onboarding profile={profile} onLogout={() => supabase.auth.signOut()} />
             )}
             {!recovery && session && ready && !profile && (
               <Center>
@@ -455,25 +454,16 @@ function ResetPassword({ onDone, onCancel }) {
   );
 }
 
-/* ================= Onboarding (atleta sem vínculo) ================= */
-function Onboarding({ profile, onBecomeCoach, onLogout }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => { navigator.clipboard?.writeText(profile.email); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+/* ================= Onboarding (fallback: conta recém-criada) ================= */
+function Onboarding({ profile, onLogout }) {
   return (
     <Frame title="Bem-vindo" subtitle={profile.email} onExit={onLogout} exitLabel="sair" logout>
       <div style={{ ...card.base, maxWidth: 520 }} className="rise">
-        <SectionTitle>Você ainda não está vinculado a um treinador</SectionTitle>
+        <SectionTitle>Sua conta está quase pronta</SectionTitle>
         <p style={{ color: MUTE, fontSize: 13.5, lineHeight: 1.6 }}>
-          Compartilhe seu email com seu treinador para ele te adicionar. Assim que ele vincular, seus treinos aparecem aqui.
+          Estamos configurando seu acesso. Assim que seu treinador montar seu plano, seus treinos aparecem aqui —
+          é só voltar mais tarde. Se demorar, fale com ele.
         </p>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "14px 0", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 11, padding: "10px 12px" }}>
-          <Mail size={16} color={MUTE} />
-          <span className="mono" style={{ flex: 1, fontSize: 13, color: TEXT }}>{profile.email}</span>
-          <button onClick={copy} style={btn.ghost}><Copy size={14} /> {copied ? "copiado" : "copiar"}</button>
-        </div>
-        <div style={{ height: 1, background: LINE, margin: "18px 0" }} />
-        <p style={{ color: MUTE, fontSize: 13 }}>É você o treinador?</p>
-        <button onClick={onBecomeCoach} style={{ ...btn.outline, marginTop: 8 }}><Users size={15} /> Ativar modo treinador</button>
       </div>
     </Frame>
   );
@@ -514,7 +504,6 @@ function ViewSwitch({ view, setView }) {
 }
 function CoachArea({ profile, onLogout }) {
   const [athletes, setAthletes] = useState([]);
-  const [pending, setPending] = useState([]);
   const [stats, setStats] = useState({});
   const [manageId, setManageId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -524,7 +513,6 @@ function CoachArea({ profile, onLogout }) {
     setLoading(true);
     const a = await api.listAthletes(profile.id);
     setAthletes(a);
-    setPending(await api.pendingAthletes());
     const s = {};
     for (const at of a) s[at.id] = athleteStats(await api.listWorkouts(at.id), at);
     setStats(s);
@@ -541,33 +529,14 @@ function CoachArea({ profile, onLogout }) {
   if (view === "me") {
     return <AthleteArea profile={profile} onLogout={onLogout} selfManage viewSwitch={sw} />;
   }
-  return <CoachHome profile={profile} athletes={athletes} pending={pending} stats={stats} loading={loading}
+  return <CoachHome profile={profile} athletes={athletes} stats={stats} loading={loading}
     reload={load} onManage={setManageId} onLogout={onLogout} viewSwitch={sw} />;
 }
 
 function raceColor(days) { return days == null ? MUTE : days <= 21 ? "#ff5a3c" : days <= 56 ? "#f5a524" : "#c084fc"; }
 export function adherColor(p) { return p == null ? MUTE : p >= 80 ? "#a3e635" : p >= 50 ? "#f5a524" : "#ff5a3c"; }
 
-function CoachHome({ profile, athletes, pending = [], stats, loading, reload, onManage, onLogout, viewSwitch = null }) {
-  const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [linkingId, setLinkingId] = useState(null);
-  const link = async () => {
-    if (!email.trim()) return;
-    setBusy(true); setMsg(null);
-    const { error } = await api.linkAthlete(email.trim());
-    if (error) setMsg({ ok: false, t: error.message });
-    else { setMsg({ ok: true, t: "Atleta vinculado!" }); setEmail(""); await reload(); }
-    setBusy(false);
-  };
-  const linkPending = async (p) => {
-    setLinkingId(p.id); setMsg(null);
-    const { error } = await api.linkAthlete(p.email);
-    if (error) setMsg({ ok: false, t: error.message });
-    else await reload();
-    setLinkingId(null);
-  };
+function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogout, viewSwitch = null }) {
   const list = athletes.map((a) => ({ a, s: stats[a.id] || {} }));
   const sorted = [...list].sort((x, y) =>
     (y.s.needsAttention ? 1 : 0) - (x.s.needsAttention ? 1 : 0) || (x.s.daysToRace ?? 9999) - (y.s.daysToRace ?? 9999));
@@ -589,38 +558,7 @@ function CoachHome({ profile, athletes, pending = [], stats, loading, reload, on
             <Stat label="Precisam de atenção" value={attention} unit="atleta(s)" color={attention ? "#ff5a3c" : "#a3e635"} icon={AlertTriangle} />
           </div>
 
-          {pending.length > 0 && (
-            <div style={{ ...card.base, marginBottom: 18, border: `1px solid rgba(34,211,238,0.4)` }}>
-              <SectionTitle>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  <Mail size={15} color="#22d3ee" /> Novos alunos aguardando vínculo
-                  <Badge c="#22d3ee">{pending.length}</Badge>
-                </span>
-              </SectionTitle>
-              <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 12 }}>
-                Criaram a conta e ainda não estão no seu painel. Clique em <b style={{ color: TEXT }}>Vincular</b> para adicioná-los.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {pending.map((p) => (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 12, flexWrap: "wrap" }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(34,211,238,0.12)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                      <Users size={16} color="#22d3ee" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="disp" style={{ fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.full_name || p.email}</div>
-                      <div className="mono" style={{ fontSize: 11.5, color: MUTE, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.email}{p.created_at ? ` · ${dm(toDate(String(p.created_at).slice(0, 10)))}` : ""}</div>
-                    </div>
-                    <button disabled={linkingId === p.id} onClick={() => linkPending(p)} style={{ ...btn.solid, opacity: linkingId === p.id ? 0.6 : 1 }}>
-                      <Plus size={16} /> {linkingId === p.id ? "vinculando…" : "Vincular"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {msg && <div style={{ fontSize: 12.5, marginTop: 8, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
-            </div>
-          )}
-
-          {athletes.length === 0 && pending.length === 0 ? <Empty>Nenhum atleta ainda. Quando um aluno criar a conta, ele aparece aqui pra você vincular.</Empty> : athletes.length === 0 ? null : (
+          {athletes.length === 0 ? <Empty>Nenhum aluno ainda. Assim que alguém criar a conta, aparece aqui automaticamente.</Empty> : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
               {sorted.map(({ a, s }) => (
                 <button key={a.id} onClick={() => onManage(a.id)} style={{
@@ -661,19 +599,6 @@ function CoachHome({ profile, athletes, pending = [], stats, loading, reload, on
               ))}
             </div>
           )}
-
-          <div style={{ ...card.base, marginTop: 18 }}>
-            <SectionTitle>Vincular novo atleta</SectionTitle>
-            <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 10 }}>
-              O atleta precisa ter criado a conta antes. Informe o email dele:
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input style={{ ...inp.base, flex: 1, minWidth: 200 }} placeholder="email@atleta.com" value={email}
-                onChange={(e) => { setEmail(e.target.value); setMsg(null); }} onKeyDown={(e) => e.key === "Enter" && link()} />
-              <button disabled={busy} onClick={link} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}><Plus size={16} /> Vincular</button>
-            </div>
-            {msg && <div style={{ fontSize: 12.5, marginTop: 8, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
-          </div>
         </div>
       )}
     </Frame>
