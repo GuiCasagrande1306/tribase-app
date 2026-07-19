@@ -66,6 +66,23 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- ---------- Cadastro restrito a @gmail.com (trava server-side) ----------
+-- O frontend também valida, mas este trigger é o backstop: mesmo chamando a
+-- API de signup direto, um email que não seja @gmail.com é rejeitado.
+create or replace function public.enforce_gmail_signup()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.email is null or lower(new.email) not like '%@gmail.com' then
+    raise exception 'Cadastro permitido apenas com email @gmail.com.' using errcode = '22023';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists enforce_gmail_before_insert on auth.users;
+create trigger enforce_gmail_before_insert
+  before insert on auth.users
+  for each row execute function public.enforce_gmail_signup();
+
 -- ---------- RPC: tornar-se treinador ----------
 create or replace function public.become_coach()
 returns void language plpgsql security definer set search_path = public as $$

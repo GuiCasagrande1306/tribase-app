@@ -347,6 +347,9 @@ function Auth() {
         const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
         if (error) throw error;
       } else {
+        if (!/@gmail\.com\s*$/i.test(email.trim())) {
+          throw new Error("O cadastro é permitido apenas com email @gmail.com.");
+        }
         const { error } = await supabase.auth.signUp({
           email, password: pass, options: { data: { full_name: name } },
         });
@@ -404,6 +407,7 @@ function Auth() {
       </div>
       <p style={{ textAlign: "center", color: MUTE, fontSize: 11.5, marginTop: 18, lineHeight: 1.5 }}>
         Treinador cria a conta e ativa o modo treinador. Atleta cria a conta e compartilha o email com o treinador para ser vinculado.
+        {mode === "up" && <><br /><b style={{ color: "#ffd9cf" }}>O cadastro é aceito apenas com email @gmail.com.</b></>}
       </p>
     </div>
   );
