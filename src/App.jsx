@@ -1221,6 +1221,7 @@ function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null 
           {tab === "plano" && selfManage && (
             <div className="rise">
               <RaceDataCard athlete={profile} onSaved={load} />
+              <AiRecalibrate coachId={profile.id} athlete={profile} workouts={workouts} onApplied={load} />
               <NewWorkoutForm coachId={profile.id} athleteId={profile.id} onAdded={load} />
               <BulkPlanImport coachId={profile.id} athlete={profile} onDone={load} />
             </div>
