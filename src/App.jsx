@@ -8,14 +8,16 @@ const Evolution = lazy(() => import("./charts.jsx").then((m) => ({ default: m.Ev
 const PlanVsActual = lazy(() => import("./charts.jsx").then((m) => ({ default: m.PlanVsActual })));
 import {
   Waves, Bike, Footprints, Layers, Dumbbell, Moon, Plus, Trash2, Check,
-  ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Copy, Upload,
+  ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Copy, Upload, Mail,
   Flame, Trophy, X, Heart, Mountain, Zap, FileText, Gauge, Download, AlertTriangle, CheckCircle2, ChevronRight,
-  TrendingUp, TrendingDown, Sparkles, KeyRound,
+  TrendingUp, TrendingDown, Sparkles, KeyRound, Settings, User,
 } from "lucide-react";
 
 /* ================= tema ================= */
 export const INK = "#121114", PANEL = "#1a191e", PANEL2 = "#232128", LINE = "#302e37";
 export const TEXT = "#f3f1ef", MUTE = "#9c97a3", ACCENT = "#ff5a3c";
+// Client ID do app no Strava (é PÚBLICO — aparece na URL de autorização). Preencher após registrar o app.
+export const STRAVA_CLIENT_ID = "";
 export const DISC = {
   "Natação": { c: "#22d3ee", icon: Waves },
   "Pedal": { c: "#f5a524", icon: Bike },
@@ -200,6 +202,10 @@ const demoApi = {
   updateWorkout: async (id, fields) => { const w = demoWorkouts.find((x) => x.id === id); if (w) Object.assign(w, fields); return _ok; },
   deleteWorkout: async (id) => { const i = demoWorkouts.findIndex((x) => x.id === id); if (i >= 0) demoWorkouts.splice(i, 1); return _ok; },
   aiRecalibrate: async () => ({ data: { ok: true, result: { analise: "Modo demo: exemplo de análise. Aderência boa, sem sinais de fadiga — leve progressão sugerida.", aderencia: "demo", ajustes: [] } }, error: null }),
+  stravaStatus: async () => null,
+  stravaConnect: async () => ({ data: { ok: true }, error: null }),
+  stravaSync: async () => ({ data: { ok: true, matched: 0, inserted: 0, skipped: 0 }, error: null }),
+  stravaDisconnect: async () => _ok,
 };
 
 /* ================= data layer ================= */
@@ -226,6 +232,18 @@ const supaApi = {
   updateWorkout: async (id, fields) => supabase.from("workouts").update(fields).eq("id", id),
   deleteWorkout: async (id) => supabase.from("workouts").delete().eq("id", id),
   aiRecalibrate: async (payload) => supabase.functions.invoke("ai-recalibrate", { body: payload }),
+  stravaStatus: async () => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u?.user) return null;
+    const { data } = await supabase.from("strava_accounts").select("athlete_name,connected_at,last_sync").eq("athlete_id", u.user.id).maybeSingle();
+    return data;
+  },
+  stravaConnect: async (code) => supabase.functions.invoke("strava-oauth", { body: { code } }),
+  stravaSync: async () => supabase.functions.invoke("strava-sync", { body: {} }),
+  stravaDisconnect: async () => {
+    const { data: u } = await supabase.auth.getUser();
+    return supabase.from("strava_accounts").delete().eq("athlete_id", u?.user?.id);
+  },
 };
 
 const api = DEMO ? demoApi : supaApi;
@@ -236,11 +254,28 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [ready, setReady] = useState(false);
   const [recovery, setRecovery] = useState(false);
+  const [stravaToast, setStravaToast] = useState(null);
 
   const refreshProfile = useCallback(async () => {
     const p = await api.myProfile();
     setProfile(p);
   }, []);
+
+  // retorno do OAuth do Strava: ?code=...&scope=...activity...
+  useEffect(() => {
+    if (DEMO || !session) return;
+    const p = new URLSearchParams(window.location.search);
+    const code = p.get("code");
+    if (!code || !(p.get("scope") || "").includes("activity")) return;
+    (async () => {
+      setStravaToast({ ok: true, t: "Conectando ao Strava…" });
+      const { data, error } = await api.stravaConnect(code);
+      window.history.replaceState({}, "", window.location.pathname);
+      if (error || data?.error) setStravaToast({ ok: false, t: "Falha ao conectar o Strava. Tente de novo." });
+      else setStravaToast({ ok: true, t: "Strava conectado! Abra a aba Importar para sincronizar." });
+      setTimeout(() => setStravaToast(null), 6000);
+    })();
+  }, [session]);
 
   useEffect(() => {
     if (DEMO) return;
@@ -265,6 +300,13 @@ export default function App() {
     <div style={shell.root}>
       <style>{FONTS}</style>
       <div style={shell.glow1} /><div style={shell.glow2} />
+      {stravaToast && (
+        <div style={{ position: "fixed", top: "calc(14px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)", zIndex: 100,
+          background: PANEL, border: `1px solid ${stravaToast.ok ? "rgba(252,82,0,0.5)" : "rgba(255,90,60,0.5)"}`, color: TEXT,
+          padding: "11px 16px", borderRadius: 13, fontSize: 13, fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,0.4)", maxWidth: "92vw" }}>
+          {stravaToast.t}
+        </div>
+      )}
       <div style={{ position: "relative", zIndex: 2 }}>
         {DEMO ? (
           <DemoShell />
@@ -1115,7 +1157,7 @@ function WelcomeAthlete({ profile, onSaved }) {
   const steps = [
     { icon: Flag, c: "#ff5a3c", t: "Defina sua prova", d: "Preencha acima o objetivo, a data e o tempo-alvo. Isso ajuda seu treinador a calibrar o plano." },
     { icon: FileText, c: "#c084fc", t: "Seu treinador monta o plano", d: "Em breve seus treinos aparecem aqui na Visão geral e no Calendário, com pace e observações." },
-    { icon: CheckCircle2, c: "#a3e635", t: "Treine e registre", d: "Marque cada treino como feito, dê sua nota de esforço (RPE) e, se usar Strava, importe pela aba Importar." },
+    { icon: CheckCircle2, c: "#a3e635", t: "Treine e registre", d: "Marque cada treino como feito e dê sua nota de esforço (RPE). Conecte seu Strava em Configurações da conta pra os treinos entrarem sozinhos." },
   ];
   return (
     <div className="rise">
@@ -1194,8 +1236,6 @@ function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null 
           {tab === "calendar" && <CalendarView workouts={workouts} onOpen={setDetailId} />}
           {tab === "evolution" && <Evolution workouts={workouts} />}
           {tab === "reports" && <Reports workouts={workouts} />}
-          {tab === "import" && <ImportPanel profile={profile} onImported={async () => { await load(); setTab("reports"); }} />}
-          {tab === "export" && <ExportPanel workouts={workouts} profile={profile} />}
           {tab === "plano" && selfManage && (
             <div className="rise">
               <RaceDataCard athlete={profile} onSaved={load} />
@@ -1216,7 +1256,7 @@ function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null 
 }
 
 function Tabs({ tab, setTab, selfManage = false }) {
-  const items = [["overview", "Visão geral", Activity], ["calendar", "Calendário", Calendar], ["evolution", "Evolução", TrendingUp], ["reports", "Relatórios", BarChart3], ["import", "Importar", Upload], ["export", "Exportar", Download]];
+  const items = [["overview", "Visão geral", Activity], ["calendar", "Calendário", Calendar], ["evolution", "Evolução", TrendingUp], ["reports", "Relatórios", BarChart3]];
   if (selfManage) items.splice(1, 0, ["plano", "Meu plano", Plus]);
   return (
     <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
@@ -1306,6 +1346,80 @@ function DisciplineBars({ workouts }) {
 }
 
 
+/* ================= Strava (conexão + sincronização) ================= */
+const STRAVA_ORANGE = "#fc5200";
+function StravaCard({ onSynced }) {
+  const [status, setStatus] = useState(undefined); // undefined=carregando, null=desconectado, obj=conectado
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const load = useCallback(async () => { setStatus(await api.stravaStatus()); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const connect = () => {
+    if (!STRAVA_CLIENT_ID) { setMsg({ ok: false, t: "Integração ainda não configurada (falta o Client ID do Strava)." }); return; }
+    const redirect = window.location.origin + "/";
+    window.location.href = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(redirect)}&response_type=code&approval_prompt=auto&scope=read,activity:read_all`;
+  };
+  const sync = async () => {
+    setBusy(true); setMsg(null);
+    const { data, error } = await api.stravaSync();
+    if (error || data?.error) setMsg({ ok: false, t: (data?.error) || error?.message || "Falha ao sincronizar" });
+    else {
+      const d = data || {};
+      setMsg({ ok: true, t: `Sincronizado: ${d.matched || 0} vinculado(s) ao plano · ${d.inserted || 0} novo(s)${d.skipped ? ` · ${d.skipped} já existentes/ignorados` : ""}.` });
+      await load(); onSynced && onSynced();
+    }
+    setBusy(false);
+  };
+  const disconnect = async () => {
+    setBusy(true); setMsg(null);
+    await api.stravaDisconnect(); await load(); setBusy(false);
+  };
+
+  return (
+    <div style={{ ...card.base, marginBottom: 14, borderColor: "rgba(252,82,0,0.32)" }}>
+      <SectionTitle>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+          <span style={{ width: 20, height: 20, borderRadius: 6, background: STRAVA_ORANGE, display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <Activity size={13} color="#fff" />
+          </span>
+          Strava — sincronização automática
+        </span>
+      </SectionTitle>
+
+      {status === undefined ? (
+        <div style={{ fontSize: 12.5, color: MUTE }}>carregando…</div>
+      ) : status ? (
+        <>
+          <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
+            Conectado{status.athlete_name ? ` como ${status.athlete_name}` : ""}. Puxa suas atividades (com FC, potência e elevação)
+            e concilia com os treinos planejados.
+            {status.last_sync && <> Última sincronização: <b style={{ color: TEXT }}>{new Date(status.last_sync).toLocaleString("pt-BR")}</b>.</>}
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button disabled={busy} onClick={sync} style={{ ...btn.solid, background: `linear-gradient(135deg,${STRAVA_ORANGE},#ff7a2c)`, opacity: busy ? 0.6 : 1 }}>
+              <Activity size={16} /> {busy ? "sincronizando…" : "Sincronizar agora"}
+            </button>
+            <button disabled={busy} onClick={disconnect} style={btn.ghost}>desconectar</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
+            Conecte sua conta do Strava e seus treinos entram <b style={{ color: "#a3e635" }}>automaticamente</b> — sem exportar arquivo.
+          </p>
+          <button onClick={connect} style={{ ...btn.solid, background: `linear-gradient(135deg,${STRAVA_ORANGE},#ff7a2c)` }}>
+            <Activity size={16} /> Conectar Strava
+          </button>
+        </>
+      )}
+      {msg && <div style={{ fontSize: 12.5, marginTop: 10, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
+    </div>
+  );
+}
+
 /* ================= importação ================= */
 function ImportPanel({ profile, onImported }) {
   const [rows, setRows] = useState([]);
@@ -1372,8 +1486,9 @@ function ImportPanel({ profile, onImported }) {
 
   return (
     <div className="rise">
+      <StravaCard onSynced={onImported} />
       <div style={card.base}>
-        <SectionTitle>Importar treinos do Strava ou Garmin</SectionTitle>
+        <SectionTitle>Importar manualmente (Strava/Garmin — arquivo)</SectionTitle>
         <p style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
           No Strava: <b style={{ color: TEXT }}>Configurações → Minha conta → Baixar ou excluir sua conta → Solicitar arquivo</b> (Bulk Export)
           e use o <span className="mono">activities.csv</span>. No Garmin: exporte atividades em <span className="mono">.gpx</span> ou <span className="mono">.tcx</span>.
@@ -1874,36 +1989,85 @@ function Logo({ big, compact }) {
     </div>
   );
 }
-function ChangePassword({ onClose }) {
+function AccountSettings({ onClose }) {
+  const [profile, setProfile] = useState(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [pass2, setPass2] = useState("");
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    if (pass.length < 6) { setMsg({ ok: false, t: "A senha precisa ter ao menos 6 caracteres." }); return; }
-    if (pass !== pass2) { setMsg({ ok: false, t: "As senhas não conferem." }); return; }
-    setBusy(true); setMsg(null);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: pass });
-      if (error) throw error;
-      setMsg({ ok: true, t: "Senha alterada com sucesso!" });
-      setTimeout(() => onClose(), 1000);
-    } catch (e) { setMsg({ ok: false, t: e.message || "Erro ao alterar a senha" }); setBusy(false); }
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState({}); // { name|email|pass: {ok,t} }
+
+  useEffect(() => {
+    (async () => {
+      const p = await api.myProfile();
+      setProfile(p); setName(p?.full_name || "");
+      const { data: u } = await supabase.auth.getUser();
+      setEmail(u?.user?.email || p?.email || "");
+    })();
+  }, []);
+
+  const setM = (k, ok, t) => setMsg((m) => ({ ...m, [k]: { ok, t } }));
+
+  const saveName = async () => {
+    if (!name.trim() || !profile) return;
+    setBusy("name");
+    const { error } = await api.updateProfile(profile.id, { full_name: name.trim() });
+    setM("name", !error, error ? error.message : "Nome atualizado!");
+    setBusy("");
   };
+  const saveEmail = async () => {
+    if (!email.trim()) return;
+    if (!/@gmail\.com\s*$/i.test(email.trim())) { setM("email", false, "Use um email @gmail.com."); return; }
+    setBusy("email");
+    const { error } = await supabase.auth.updateUser({ email: email.trim() });
+    setM("email", !error, error ? error.message : "Enviamos um link de confirmação ao novo email. A troca conclui quando você confirmar.");
+    setBusy("");
+  };
+  const savePass = async () => {
+    if (pass.length < 6) { setM("pass", false, "A senha precisa ter ao menos 6 caracteres."); return; }
+    if (pass !== pass2) { setM("pass", false, "As senhas não conferem."); return; }
+    setBusy("pass");
+    const { error } = await supabase.auth.updateUser({ password: pass });
+    if (error) setM("pass", false, error.message);
+    else { setM("pass", true, "Senha alterada!"); setPass(""); setPass2(""); }
+    setBusy("");
+  };
+
+  const Msg = ({ k }) => msg[k] ? <div style={{ fontSize: 12.5, marginTop: 8, color: msg[k].ok ? "#a3e635" : "#ff8a73" }}>{msg[k].t}</div> : null;
+
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", zIndex: 50, padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ ...card.base, width: "100%", maxWidth: 380 }} className="rise">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <SectionTitle><KeyRound size={15} style={{ marginRight: 6, verticalAlign: "-2px" }} />Trocar senha</SectionTitle>
-          <button onClick={onClose} style={{ ...btn.ghost, padding: 6 }}><X size={16} /></button>
+    <div style={{ position: "fixed", inset: 0, background: INK, zIndex: 60, overflowY: "auto" }} className="rise">
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "calc(22px + env(safe-area-inset-top)) 18px calc(60px + env(safe-area-inset-bottom))" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div className="disp" style={{ fontWeight: 900, fontSize: 22, color: TEXT, letterSpacing: "-0.02em" }}>Configurações da conta</div>
+          <button onClick={onClose} style={btn.ghost}><X size={16} /> fechar</button>
         </div>
-        <Field label="Nova senha"><input style={inp.base} type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus /></Field>
-        <Field label="Repita a nova senha"><input style={inp.base} type="password" value={pass2}
-          onChange={(e) => setPass2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} /></Field>
-        {msg && <div style={{ fontSize: 12.5, marginTop: 4, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
-        <button disabled={busy} onClick={save} style={{ ...btn.solid, width: "100%", marginTop: 12, opacity: busy ? 0.6 : 1 }}>
-          {busy ? "…" : "Salvar nova senha"}
-        </button>
+
+        <div style={{ ...card.base, marginBottom: 14 }}>
+          <SectionTitle><User size={15} style={{ marginRight: 6, verticalAlign: "-2px" }} />Perfil</SectionTitle>
+          <Field label="Nome"><input style={inp.base} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <button disabled={busy === "name"} onClick={saveName} style={{ ...btn.outline, opacity: busy === "name" ? 0.6 : 1 }}>Salvar nome</button>
+          <Msg k="name" />
+        </div>
+
+        <div style={{ ...card.base, marginBottom: 14 }}>
+          <SectionTitle><Mail size={15} style={{ marginRight: 6, verticalAlign: "-2px" }} />Email</SectionTitle>
+          <Field label="Email (somente @gmail.com)"><input style={inp.base} type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          <button disabled={busy === "email"} onClick={saveEmail} style={{ ...btn.outline, opacity: busy === "email" ? 0.6 : 1 }}>Salvar email</button>
+          <Msg k="email" />
+        </div>
+
+        <div style={{ ...card.base, marginBottom: 14 }}>
+          <SectionTitle><KeyRound size={15} style={{ marginRight: 6, verticalAlign: "-2px" }} />Senha</SectionTitle>
+          <Field label="Nova senha"><input style={inp.base} type="password" value={pass} onChange={(e) => setPass(e.target.value)} /></Field>
+          <Field label="Repita a nova senha"><input style={inp.base} type="password" value={pass2}
+            onChange={(e) => setPass2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && savePass()} /></Field>
+          <button disabled={busy === "pass"} onClick={savePass} style={{ ...btn.outline, opacity: busy === "pass" ? 0.6 : 1 }}>Salvar nova senha</button>
+          <Msg k="pass" />
+        </div>
+
+        <StravaCard onSynced={() => setTimeout(() => window.location.reload(), 1400)} />
       </div>
     </div>
   );
@@ -1911,7 +2075,7 @@ function ChangePassword({ onClose }) {
 
 function Frame({ title, subtitle, onExit, exitLabel, logout, backIcon, children }) {
   const narrow = useMediaQuery("(max-width: 560px)");
-  const [showPwd, setShowPwd] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   return (
     <div style={{
       maxWidth: 980, margin: "0 auto",
@@ -1927,14 +2091,14 @@ function Frame({ title, subtitle, onExit, exitLabel, logout, backIcon, children 
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button onClick={() => setShowPwd(true)} title="Trocar senha" style={{ ...btn.ghost, padding: narrow ? "8px 9px" : "8px 11px" }}>
-            <KeyRound size={15} />{!narrow && " senha"}
+          <button onClick={() => setShowSettings(true)} title="Configurações da conta" style={{ ...btn.ghost, padding: narrow ? "8px 9px" : "8px 11px" }}>
+            <Settings size={15} />{!narrow && " conta"}
           </button>
           <button onClick={onExit} style={btn.ghost}>{logout ? <LogOut size={15} /> : <ChevronLeft size={15} />} {exitLabel}</button>
         </div>
       </div>
       {children}
-      {showPwd && <ChangePassword onClose={() => setShowPwd(false)} />}
+      {showSettings && <AccountSettings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
