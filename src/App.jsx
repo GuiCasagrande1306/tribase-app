@@ -1109,6 +1109,50 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
 }
 
 /* ================= Athlete ================= */
+/* ================= Boas-vindas (aluno recém-cadastrado, sem plano ainda) ================= */
+function WelcomeAthlete({ profile, onSaved }) {
+  const first = ((profile.full_name || "").trim().split(/\s+/)[0]) || "atleta";
+  const steps = [
+    { icon: Flag, c: "#ff5a3c", t: "Defina sua prova", d: "Preencha acima o objetivo, a data e o tempo-alvo. Isso ajuda seu treinador a calibrar o plano." },
+    { icon: FileText, c: "#c084fc", t: "Seu treinador monta o plano", d: "Em breve seus treinos aparecem aqui na Visão geral e no Calendário, com pace e observações." },
+    { icon: CheckCircle2, c: "#a3e635", t: "Treine e registre", d: "Marque cada treino como feito, dê sua nota de esforço (RPE) e, se usar Strava, importe pela aba Importar." },
+  ];
+  return (
+    <div className="rise">
+      <div style={{ ...card.base, marginBottom: 16, textAlign: "center", padding: "32px 22px",
+        background: "linear-gradient(160deg, rgba(255,90,60,0.12), rgba(192,132,252,0.06))", borderColor: "rgba(255,90,60,0.28)" }}>
+        <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 8 }}>🎉</div>
+        <div className="disp" style={{ fontWeight: 900, fontSize: 27, color: TEXT, letterSpacing: "-0.02em", lineHeight: 1.05 }}>
+          Bem-vindo(a), {first}!
+        </div>
+        <p style={{ color: MUTE, fontSize: 14, lineHeight: 1.6, maxWidth: 470, margin: "10px auto 0" }}>
+          Que bom te ter no <b style={{ color: TEXT }}>TRIBASE</b>. Seu treinador já foi avisado e vai montar seu plano
+          personalizado. Enquanto isso, preencha sua prova-alvo abaixo pra ele começar com o pé direito.
+        </p>
+      </div>
+
+      <RaceDataCard athlete={profile} onSaved={onSaved} />
+
+      <div style={card.base}>
+        <SectionTitle>Como funciona</SectionTitle>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: 13, alignItems: "flex-start" }}>
+              <div style={{ width: 38, height: 38, borderRadius: 11, background: `${s.c}1a`, border: `1px solid ${s.c}44`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                <s.icon size={18} color={s.c} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div className="disp" style={{ fontWeight: 700, fontSize: 14.5, color: TEXT }}>{i + 1}. {s.t}</div>
+                <div style={{ color: MUTE, fontSize: 13, lineHeight: 1.55, marginTop: 2 }}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1142,7 +1186,11 @@ function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null 
       <Tabs tab={tab} setTab={setTab} selfManage={selfManage} />
       {loading ? <Empty>carregando…</Empty> : (
         <Suspense fallback={<Empty>carregando gráficos…</Empty>}>
-          {tab === "overview" && <Overview workouts={workouts} profile={profile} onOpen={setDetailId} />}
+          {tab === "overview" && (
+            !selfManage && workouts.length === 0
+              ? <WelcomeAthlete profile={profile} onSaved={load} />
+              : <Overview workouts={workouts} profile={profile} onOpen={setDetailId} />
+          )}
           {tab === "calendar" && <CalendarView workouts={workouts} onOpen={setDetailId} />}
           {tab === "evolution" && <Evolution workouts={workouts} />}
           {tab === "reports" && <Reports workouts={workouts} />}
