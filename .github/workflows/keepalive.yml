@@ -1,0 +1,28 @@
+name: Supabase keep-alive
+
+# Mantém o projeto Supabase (plano free) ativo, evitando a pausa por
+# inatividade (~7 dias) que derruba o login com "Failed to fetch".
+# Faz uma requisição real à API REST 1x/dia. A chave abaixo é a ANON
+# (pública, já embarcada no frontend e protegida por RLS) — não é segredo.
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # todo dia às 12:00 UTC
+  workflow_dispatch:        # permite rodar manualmente pelo botão do GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        run: |
+          URL="https://evfhielwglfqinznjeiu.supabase.co"
+          ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmhpZWx3Z2xmcWluem5qZWl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3ODI5OTgsImV4cCI6MjA5NjM1ODk5OH0.VBL9HH15EEcNJYtYF907wdf8mrjmmLnpSkUURj1mo9A"
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$URL/rest/v1/profiles?select=id&limit=1" \
+            -H "apikey: $ANON" -H "Authorization: Bearer $ANON")
+          echo "Supabase REST respondeu HTTP $code"
+          # 200 (ok) ou 401/403 (RLS) contam como atividade; falha só em erro de rede/5xx
+          if [ "$code" -ge 500 ] || [ "$code" -eq 000 ]; then
+            echo "Projeto pode estar pausado ou fora do ar (HTTP $code)"; exit 1
+          fi
