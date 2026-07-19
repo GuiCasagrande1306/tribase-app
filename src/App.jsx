@@ -10,7 +10,7 @@ import {
   Waves, Bike, Footprints, Layers, Dumbbell, Moon, Plus, Trash2, Check,
   ChevronLeft, Users, LogOut, Activity, Calendar, BarChart3, Flag, Mail, Copy, Upload,
   Flame, Trophy, X, Heart, Mountain, Zap, FileText, Gauge, Download, AlertTriangle, CheckCircle2, ChevronRight,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, Sparkles,
 } from "lucide-react";
 
 /* ================= tema ================= */
@@ -198,6 +198,7 @@ const demoApi = {
   addWorkouts: async (rows) => { rows.forEach((r) => demoWorkouts.push(_row(r))); return _ok; },
   updateWorkout: async (id, fields) => { const w = demoWorkouts.find((x) => x.id === id); if (w) Object.assign(w, fields); return _ok; },
   deleteWorkout: async (id) => { const i = demoWorkouts.findIndex((x) => x.id === id); if (i >= 0) demoWorkouts.splice(i, 1); return _ok; },
+  aiRecalibrate: async () => ({ data: { ok: true, result: { analise: "Modo demo: exemplo de análise. Aderência boa, sem sinais de fadiga — leve progressão sugerida.", aderencia: "demo", ajustes: [] } }, error: null }),
 };
 
 /* ================= data layer ================= */
@@ -223,6 +224,7 @@ const supaApi = {
   addWorkouts: async (rows) => supabase.from("workouts").insert(rows),
   updateWorkout: async (id, fields) => supabase.from("workouts").update(fields).eq("id", id),
   deleteWorkout: async (id) => supabase.from("workouts").delete().eq("id", id),
+  aiRecalibrate: async (payload) => supabase.functions.invoke("ai-recalibrate", { body: payload }),
 };
 
 const api = DEMO ? demoApi : supaApi;
@@ -818,6 +820,7 @@ function ManageAthlete({ coachId, athlete, onBack }) {
     <Frame title={athlete.full_name || athlete.email} subtitle="Gerenciar treinos" onExit={onBack} exitLabel="voltar" backIcon>
       <RaceDataCard athlete={athlete} />
       {!loading && <Suspense fallback={<Empty>carregando…</Empty>}><PlanVsActual workouts={workouts} title="Planejado × cumprido do atleta" /></Suspense>}
+      <AiRecalibrate coachId={coachId} athlete={athlete} workouts={workouts} onApplied={load} />
       <CoachPlanBrief athlete={athlete} workouts={workouts} />
       <BulkPlanImport coachId={coachId} athlete={athlete} onDone={load} />
       <NewWorkoutForm coachId={coachId} athleteId={athlete.id} onAdded={load} />
@@ -948,6 +951,36 @@ function bestPaces(done) {
   if (rides.length) out["Pedal"] = `${Math.max(...rides.map((w) => w.distance / (w.durationMin / 60))).toFixed(1)} km/h`;
   return out;
 }
+// monta o payload enviado ao Gemini (Edge Function ai-recalibrate)
+function buildAiPayload(athlete, workouts) {
+  const today = todayISO();
+  const from = addDays(today, -14);      // últimas 2 semanas para análise
+  const nextTo = addDays(today, 8);      // próxima semana planejada (se existir)
+  const win = (workouts || []).filter((w) => w.date >= from);
+  const compact = (w) => ({
+    data: w.date, modalidade: w.discipline, sessao: w.type,
+    duracaoMin: w.durationMin || null, distancia: w.distance || null, unidade: w.distUnit,
+    ritmo: paceStr(w) || null, fcMedia: w.avgHr || null, rpe: w.rpe || null, status: w.status,
+  });
+  const weeksToRace = athlete?.race_date
+    ? Math.max(0, Math.ceil((toDate(athlete.race_date) - new Date()) / (86400000 * 7))) : null;
+  return {
+    hoje: today,
+    atleta: {
+      nome: athlete?.full_name || athlete?.email,
+      prova: athlete?.race || null, dataProva: athlete?.race_date || null,
+      meta: athlete?.goal || null, semanasParaProva: weeksToRace,
+    },
+    melhoresRitmos: bestPaces((workouts || []).filter((w) => w.status === "concluído")),
+    ultimasDuasSemanas: {
+      planejados: win.filter((w) => w.status !== "concluído" && w.date < today).map(compact),
+      realizados: win.filter((w) => w.status === "concluído").map(compact),
+    },
+    proximaSemanaJaPlanejada: (workouts || [])
+      .filter((w) => w.date > today && w.date <= nextTo).map(compact),
+  };
+}
+
 function buildCoachBrief(athlete, workouts, weeks) {
   const cutoff = weeks ? addDays(todayISO(), -weeks * 7) : "0000-00-00";
   const done = (workouts || []).filter((w) => w.status === "concluído" && w.date >= cutoff).sort((a, b) => a.date.localeCompare(b.date));
@@ -1039,6 +1072,108 @@ function CoachPlanBrief({ athlete, workouts }) {
           <Download size={15} /> Baixar JSON
         </button>
       </div>
+    </div>
+  );
+}
+
+/* ================= Recalibração com IA (Gemini) ================= */
+function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState(null);   // { analise, aderencia, ajustes }
+  const [msg, setMsg] = useState(null);
+  const [applied, setApplied] = useState(false);
+
+  const doneCount = (workouts || []).filter((w) => w.status === "concluído" && w.date >= addDays(todayISO(), -14)).length;
+
+  const run = async () => {
+    setBusy(true); setMsg(null); setRes(null); setApplied(false);
+    try {
+      const payload = buildAiPayload(athlete, workouts);
+      const { data, error } = await api.aiRecalibrate(payload);
+      if (error) {
+        // tenta extrair a mensagem do corpo da função (FunctionsHttpError)
+        let detail = error.message || "Falha ao chamar a IA";
+        try { const b = await error.context?.json?.(); if (b?.error) detail = b.error; } catch (e) {}
+        throw new Error(detail);
+      }
+      if (data?.error) throw new Error(data.error);
+      const r = data?.result;
+      if (!r) throw new Error("Resposta vazia da IA");
+      setRes(r);
+    } catch (e) { setMsg({ ok: false, t: e.message || "Erro" }); }
+    setBusy(false);
+  };
+
+  const apply = async () => {
+    const ajustes = (res?.ajustes || []).filter((a) => a && a.date && a.discipline);
+    if (!ajustes.length) return;
+    setBusy(true); setMsg(null);
+    const payload = ajustes.map((a) => ({
+      athlete_id: athlete.id, coach_id: coachId, date: a.date, discipline: a.discipline, type: a.type || "Treino",
+      duration_min: Number(a.duration_min) || 0, distance: Number(a.distance) || 0, dist_unit: a.dist_unit || "km",
+      target: a.target || null, notes: a.notes || null, status: "planejado",
+    }));
+    const { error } = await api.addWorkouts(payload);
+    if (error) setMsg({ ok: false, t: error.message });
+    else { setApplied(true); setMsg({ ok: true, t: `${payload.length} treino(s) aplicados ao plano!` }); onApplied && onApplied(); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={{ ...card.base, marginBottom: 16, borderColor: "rgba(168,85,247,0.35)" }}>
+      <SectionTitle><Sparkles size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#c084fc" }} />Recalibrar com IA (Gemini)</SectionTitle>
+      <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
+        A IA analisa a <b style={{ color: TEXT }}>última semana treinada</b> (planejado × realizado, FC e RPE) e
+        <b style={{ color: TEXT }}> sugere os treinos da próxima semana</b>, ajustados à performance e à fadiga.
+        Você revisa e aplica com 1 clique.
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <button disabled={busy} onClick={run} style={{ ...btn.solid, background: "linear-gradient(90deg,#a855f7,#7c3aed)", opacity: busy ? 0.6 : 1 }}>
+          <Sparkles size={15} /> {busy && !res ? "analisando…" : "Analisar a semana com IA"}
+        </button>
+        <span style={{ fontSize: 12, color: MUTE }} className="mono">{doneCount} treino(s) concluídos nas últimas 2 sem</span>
+      </div>
+
+      {res && (
+        <div style={{ marginTop: 14 }}>
+          {res.aderencia && <div style={{ fontSize: 12.5, color: "#c084fc", marginBottom: 6 }} className="mono">Aderência: {res.aderencia}</div>}
+          <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
+            {res.analise}
+          </div>
+
+          {(res.ajustes || []).length > 0 ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+                <span className="mono" style={{ fontSize: 12, color: MUTE }}>Sugestão · {res.ajustes.length} treino(s) para a próxima semana</span>
+                {!applied && (
+                  <button disabled={busy} onClick={apply} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}>
+                    <Plus size={16} /> {busy ? "aplicando…" : `Aplicar ${res.ajustes.length} treinos`}
+                  </button>
+                )}
+                {applied && <span style={{ fontSize: 12.5, color: "#a3e635" }}><CheckCircle2 size={14} style={{ verticalAlign: "-2px" }} /> aplicados</span>}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflow: "auto" }}>
+                {res.ajustes.map((w, i) => {
+                  const meta = DISC[w.discipline] || DISC["Corrida"];
+                  const Icon = meta.icon;
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10 }}>
+                      <Icon size={15} color={meta.c} />
+                      <span className="mono" style={{ fontSize: 11, color: MUTE, width: 44 }}>{w.date ? dm(toDate(w.date)) : "?"}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: meta.c, width: 64 }}>{w.discipline}</span>
+                      <span className="disp" style={{ flex: 1, fontSize: 13, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.type}{w.target ? ` · ${w.target}` : ""}</span>
+                      <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.duration_min ? fmtDur(w.duration_min) : ""}{w.distance ? ` · ${w.distance}${w.dist_unit || ""}` : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: MUTE, marginTop: 10 }}>A IA não propôs novos treinos desta vez (veja a análise acima).</div>
+          )}
+        </div>
+      )}
+      {msg && <div style={{ fontSize: 12.5, marginTop: 10, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
     </div>
   );
 }
