@@ -51,8 +51,9 @@ PRINCÍPIOS OBRIGATÓRIOS:
 - Sobrecarga progressiva gradual; se a aderência foi baixa ou o RPE/FC indicam fadiga, RECUE o volume/intensidade.
 - Se a aderência foi alta e o atleta respondeu bem, progrida ~5–10%.
 - VARIE o formato das sessões em relação à semana anterior (evite repetir o mesmo treino) mantendo o alvo fisiológico.
-- Em triathlon: inclua brick e, aos sábados, 2 modalidades em sequência com transição (alterne T2 bike→corrida e, pontualmente, T1 nado→bike).
-- Respeite os dias que o atleta costuma treinar e a especificidade da prova-alvo.
+- Planeje EXATAMENTE "treinosPorSemana" sessões na semana (se informado no perfil); distribua com bom senso (dias de descanso entre os fortes).
+- Respeite a MODALIDADE do atleta: em "Triathlon", combine natação/pedal/corrida + brick e, aos sábados, 2 modalidades em sequência com transição (alterne T2 bike→corrida e, pontualmente, T1 nado→bike); em "Corrida"/"Natação"/"Ciclismo", foque SÓ nesse esporte (sem brick/transição), variando os tipos de sessão.
+- Os ritmos/zonas devem sair dos dados REAIS (melhoresRitmos e realizados vindos do Strava); não invente FC/pace se não houver dado — use percepção de esforço.
 - Datas da próxima semana: use as datas reais (a partir de "hoje" informado no payload).
 
 Escreva a "analise" em português, curta e direta, como um treinador falando com outro (o treinador humano vai revisar e aprovar).

@@ -654,17 +654,50 @@ function Badge({ c, icon: Icon, children }) {
   );
 }
 
+const MODALITIES = ["Corrida", "Natação", "Ciclismo", "Triathlon"];
+const DIST_BY_MOD = {
+  "Corrida": ["5 km", "10 km", "21 km (meia)", "42 km (maratona)", "Ultra"],
+  "Natação": ["Águas abertas 1 km", "Águas abertas 2 km", "Águas abertas 3,8 km", "Travessia"],
+  "Ciclismo": ["40 km", "70 km", "100 km", "160 km", "Gran Fondo"],
+  "Triathlon": ["Sprint", "Olímpico", "Meio Ironman 70.3", "Ironman"],
+};
 function RaceDataCard({ athlete, onSaved }) {
-  const [info, setInfo] = useState({ race: athlete?.race || "", race_date: athlete?.race_date || "", goal: athlete?.goal || "" });
+  const [info, setInfo] = useState({
+    modality: athlete?.modality || "", race: athlete?.race || "", race_date: athlete?.race_date || "",
+    days_per_week: athlete?.days_per_week || "", goal: athlete?.goal || "",
+  });
   const [saved, setSaved] = useState(false);
-  const save = async () => { await api.updateProfile(athlete.id, info); setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved && onSaved(); };
+  const distOpts = DIST_BY_MOD[info.modality] || [];
+  const save = async () => {
+    const payload = { ...info, days_per_week: info.days_per_week ? Number(info.days_per_week) : null };
+    await api.updateProfile(athlete.id, payload);
+    setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved && onSaved();
+  };
   return (
     <div style={{ ...card.base, marginBottom: 16 }}>
-      <SectionTitle>Dados da prova</SectionTitle>
+      <SectionTitle>Objetivo e disponibilidade</SectionTitle>
       <div style={grid2}>
-        <Field label="Prova"><input style={inp.base} value={info.race} onChange={(e) => setInfo({ ...info, race: e.target.value })} /></Field>
-        <Field label="Data"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
-        <Field label="Tempo-objetivo"><input style={inp.base} value={info.goal} onChange={(e) => setInfo({ ...info, goal: e.target.value })} placeholder="ex.: 6h45" /></Field>
+        <Field label="Modalidade">
+          <select style={inp.base} value={info.modality} onChange={(e) => setInfo({ ...info, modality: e.target.value, race: "" })}>
+            <option value="">Selecione…</option>
+            {MODALITIES.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </Field>
+        <Field label="Distância / prova-alvo">
+          <select style={inp.base} value={info.race} onChange={(e) => setInfo({ ...info, race: e.target.value })} disabled={!info.modality}>
+            <option value="">{info.modality ? "Selecione…" : "escolha a modalidade"}</option>
+            {distOpts.map((d) => <option key={d} value={d}>{d}</option>)}
+            {info.race && !distOpts.includes(info.race) && <option value={info.race}>{info.race}</option>}
+          </select>
+        </Field>
+        <Field label="Treinos por semana">
+          <select style={inp.base} value={info.days_per_week} onChange={(e) => setInfo({ ...info, days_per_week: e.target.value })}>
+            <option value="">Selecione…</option>
+            {[3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n} dias</option>)}
+          </select>
+        </Field>
+        <Field label="Data da prova"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
+        <Field label="Tempo-objetivo (opcional)"><input style={inp.base} value={info.goal} onChange={(e) => setInfo({ ...info, goal: e.target.value })} placeholder="ex.: 6h45" /></Field>
       </div>
       <button onClick={save} style={btn.outline}>{saved ? "salvo!" : "Salvar dados"}</button>
     </div>
@@ -940,8 +973,8 @@ function buildAiPayload(athlete, workouts) {
     hoje: today,
     atleta: {
       nome: athlete?.full_name || athlete?.email,
-      prova: athlete?.race || null, dataProva: athlete?.race_date || null,
-      meta: athlete?.goal || null, semanasParaProva: weeksToRace,
+      modalidade: athlete?.modality || null, prova: athlete?.race || null, dataProva: athlete?.race_date || null,
+      meta: athlete?.goal || null, semanasParaProva: weeksToRace, treinosPorSemana: athlete?.days_per_week || null,
     },
     melhoresRitmos: bestPaces((workouts || []).filter((w) => w.status === "concluído")),
     ultimasDuasSemanas: {
@@ -1155,7 +1188,7 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
 function WelcomeAthlete({ profile, onSaved }) {
   const first = ((profile.full_name || "").trim().split(/\s+/)[0]) || "atleta";
   const steps = [
-    { icon: Flag, c: "#ff5a3c", t: "Defina sua prova", d: "Preencha acima o objetivo, a data e o tempo-alvo. Isso ajuda seu treinador a calibrar o plano." },
+    { icon: Flag, c: "#ff5a3c", t: "Conte seu objetivo", d: "Preencha acima a modalidade, a distância-alvo, quantos treinos por semana você consegue e a data da prova. O resto (ritmos, FC, volume) a gente lê do seu Strava." },
     { icon: FileText, c: "#c084fc", t: "Seu treinador monta o plano", d: "Em breve seus treinos aparecem aqui na Visão geral e no Calendário, com pace e observações." },
     { icon: CheckCircle2, c: "#a3e635", t: "Treine e registre", d: "Marque cada treino como feito e dê sua nota de esforço (RPE). Conecte seu Strava em Configurações da conta pra os treinos entrarem sozinhos." },
   ];
