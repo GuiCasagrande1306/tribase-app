@@ -665,7 +665,7 @@ function GoalTimePicker({ value, onChange }) {
         {Array.from({ length: 18 }, (_, i) => i).map((n) => <option key={n} value={n}>{n} h</option>)}
       </select>
       <select style={inp.base} value={mm} onChange={(e) => onChange(fmtGoal(h, +e.target.value))}>
-        {Array.from({ length: 12 }, (_, i) => i * 5).map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")} min</option>)}
+        {Array.from({ length: 60 }, (_, i) => i).map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")} min</option>)}
       </select>
     </div>
   );
