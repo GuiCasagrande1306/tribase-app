@@ -16,8 +16,8 @@ import {
 /* ================= tema ================= */
 export const INK = "#121114", PANEL = "#1a191e", PANEL2 = "#232128", LINE = "#302e37";
 export const TEXT = "#f3f1ef", MUTE = "#9c97a3", ACCENT = "#ff5a3c";
-// Client ID do app no Strava (é PÚBLICO — aparece na URL de autorização). Preencher após registrar o app.
-export const STRAVA_CLIENT_ID = "";
+// Client ID do app no Strava (é PÚBLICO — aparece na URL de autorização).
+export const STRAVA_CLIENT_ID = "266309";
 export const DISC = {
   "Natação": { c: "#22d3ee", icon: Waves },
   "Pedal": { c: "#f5a524", icon: Bike },
