@@ -684,10 +684,19 @@ function RaceDataCard({ athlete, onSaved }) {
     days_per_week: athlete?.days_per_week || "", goal: athlete?.goal || "",
   });
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState(null);
   const distOpts = DIST_BY_MOD[info.modality] || [];
   const save = async () => {
-    const payload = { ...info, days_per_week: info.days_per_week ? Number(info.days_per_week) : null };
-    await api.updateProfile(athlete.id, payload);
+    setErr(null);
+    const payload = {
+      modality: info.modality || null,
+      race: info.race || null,
+      race_date: info.race_date || null,      // vazio -> null (coluna date não aceita "")
+      days_per_week: info.days_per_week ? Number(info.days_per_week) : null,
+      goal: info.goal || null,
+    };
+    const { error } = await api.updateProfile(athlete.id, payload);
+    if (error) { setErr(error.message || "Erro ao salvar"); return; }
     setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved && onSaved();
   };
   return (
@@ -717,6 +726,7 @@ function RaceDataCard({ athlete, onSaved }) {
         <Field label="Tempo-objetivo (opcional)"><GoalTimePicker value={info.goal} onChange={(g) => setInfo({ ...info, goal: g })} /></Field>
       </div>
       <button onClick={save} style={btn.outline}>{saved ? "salvo!" : "Salvar dados"}</button>
+      {err && <div style={{ fontSize: 12.5, marginTop: 8, color: "#ff8a73" }}>{err}</div>}
     </div>
   );
 }
