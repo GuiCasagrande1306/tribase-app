@@ -654,6 +654,23 @@ function Badge({ c, icon: Icon, children }) {
   );
 }
 
+// tempo-objetivo: parse/format "6h45" <-> {h, m}
+function parseGoal(g) { const m = /(\d+)\s*h\s*(\d*)/i.exec(g || ""); return { h: m ? +m[1] : 0, mm: m && m[2] ? +m[2] : 0 }; }
+function fmtGoal(h, mm) { return (!h && !mm) ? "" : `${h}h${mm > 0 ? String(mm).padStart(2, "0") : ""}`; }
+function GoalTimePicker({ value, onChange }) {
+  const { h, mm } = parseGoal(value);
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <select style={inp.base} value={h} onChange={(e) => onChange(fmtGoal(+e.target.value, mm))}>
+        {Array.from({ length: 18 }, (_, i) => i).map((n) => <option key={n} value={n}>{n} h</option>)}
+      </select>
+      <select style={inp.base} value={mm} onChange={(e) => onChange(fmtGoal(h, +e.target.value))}>
+        {Array.from({ length: 12 }, (_, i) => i * 5).map((n) => <option key={n} value={n}>{String(n).padStart(2, "0")} min</option>)}
+      </select>
+    </div>
+  );
+}
+
 const MODALITIES = ["Corrida", "Natação", "Ciclismo", "Triathlon"];
 const DIST_BY_MOD = {
   "Corrida": ["5 km", "10 km", "21 km (meia)", "42 km (maratona)", "Ultra"],
@@ -697,7 +714,7 @@ function RaceDataCard({ athlete, onSaved }) {
           </select>
         </Field>
         <Field label="Data da prova"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
-        <Field label="Tempo-objetivo (opcional)"><input style={inp.base} value={info.goal} onChange={(e) => setInfo({ ...info, goal: e.target.value })} placeholder="ex.: 6h45" /></Field>
+        <Field label="Tempo-objetivo (opcional)"><GoalTimePicker value={info.goal} onChange={(g) => setInfo({ ...info, goal: g })} /></Field>
       </div>
       <button onClick={save} style={btn.outline}>{saved ? "salvo!" : "Salvar dados"}</button>
     </div>
