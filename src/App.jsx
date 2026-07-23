@@ -410,7 +410,7 @@ function Landing({ onStart }) {
       {/* hero */}
       <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#c084fc", background: "rgba(192,132,252,0.1)", border: "1px solid rgba(192,132,252,0.35)", borderRadius: 20, padding: "6px 14px", marginBottom: 22 }}>
-          <Activity size={13} /> Do primeiro treino ao seu recorde
+          <Activity size={13} /> Mais rápido, sem treinar no escuro
         </div>
         <h1 className="disp" style={{ fontWeight: 900, fontSize: "clamp(34px, 8vw, 62px)", lineHeight: 1.02, letterSpacing: "-0.03em", color: TEXT, margin: 0 }}>
           Treinar ficou <span style={{ color: ACCENT }}>inteligente</span>.
