@@ -872,8 +872,6 @@ function ManageAthlete({ coachId, athlete, onBack }) {
       <RaceDataCard athlete={athlete} />
       {!loading && <Suspense fallback={<Empty>carregando…</Empty>}><PlanVsActual workouts={workouts} title="Planejado × cumprido do atleta" /></Suspense>}
       <AiRecalibrate coachId={coachId} athlete={athlete} workouts={workouts} onApplied={load} />
-      <CoachPlanBrief athlete={athlete} workouts={workouts} />
-      <BulkPlanImport coachId={coachId} athlete={athlete} onDone={load} />
       <NewWorkoutForm coachId={coachId} athleteId={athlete.id} onAdded={load} />
       {loading ? <Empty>carregando…</Empty> : (
         <>
@@ -1320,7 +1318,6 @@ function AthleteArea({ profile, onLogout, selfManage = false, viewSwitch = null 
               <RaceDataCard athlete={profile} onSaved={load} />
               <AiRecalibrate coachId={profile.id} athlete={profile} workouts={workouts} onApplied={load} />
               <NewWorkoutForm coachId={profile.id} athleteId={profile.id} onAdded={load} />
-              <BulkPlanImport coachId={profile.id} athlete={profile} onDone={load} />
             </div>
           )}
         </Suspense>
