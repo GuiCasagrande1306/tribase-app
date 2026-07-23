@@ -386,17 +386,17 @@ function DemoRoleToggle({ role, setRole }) {
 function Landing({ onStart }) {
   const narrow = useMediaQuery("(max-width: 640px)");
   const features = [
-    { icon: Sparkles, c: "#c084fc", t: "IA que recalibra sua semana", d: "Todo domingo à noite o Gemini analisa seus treinos e monta o próximo bloco, ajustado à sua performance e fadiga." },
+    { icon: Calendar, c: "#c084fc", t: "Recalibração automática", d: "Todo domingo à noite seu plano é reanalisado e o próximo bloco é montado, ajustado à sua performance e fadiga." },
     { icon: Activity, c: "#fc5200", t: "Strava sincronizado", d: "Conecte sua conta e os treinos entram sozinhos — com FC, pace, potência e elevação. Sem planilha." },
-    { icon: Users, c: "#22d3ee", t: "Treinador no comando", d: "Nada vai pro seu plano sem o seu treinador revisar e aprovar. IA que assiste, humano que decide." },
+    { icon: Users, c: "#22d3ee", t: "Treinador no comando", d: "Nada vai pro seu plano sem o seu treinador revisar e aprovar. Toda semana passa por ele." },
     { icon: Gauge, c: "#a3e635", t: "Zonas e intervalos", d: "Sessões estruturadas com zonas de FC e ritmos-alvo, séries e tiros — nada de achismo." },
     { icon: Layers, c: "#f5a524", t: "Corrida, nado, bike e triathlon", d: "Plano periodizado pra sua modalidade e prova, do 5 km ao Ironman, base ao pico." },
     { icon: TrendingUp, c: "#ff5a3c", t: "Evolução visível", d: "Aderência, volume e ganhos semana a semana. Você vê o progresso, não só sente." },
   ];
   const steps = [
     { n: "1", t: "Crie sua conta", d: "Rápido e grátis, com sua conta Google." },
-    { n: "2", t: "Conecte o Strava e defina o objetivo", d: "Modalidade, prova ou plano de semanas — a IA lê seu histórico." },
-    { n: "3", t: "Receba seu plano e treine", d: "A IA propõe, o treinador aprova, você segue. Toda semana." },
+    { n: "2", t: "Conecte o Strava e defina o objetivo", d: "Modalidade, prova ou plano de semanas — lendo seu histórico de treinos." },
+    { n: "3", t: "Receba seu plano e treine", d: "O plano é montado, o treinador aprova, você segue. Toda semana." },
   ];
   const H = narrow ? 15 : 20;
   return (
@@ -410,13 +410,13 @@ function Landing({ onStart }) {
       {/* hero */}
       <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#c084fc", background: "rgba(192,132,252,0.1)", border: "1px solid rgba(192,132,252,0.35)", borderRadius: 20, padding: "6px 14px", marginBottom: 22 }}>
-          <Sparkles size={13} /> Treino guiado por IA + seu treinador
+          <Activity size={13} /> Treino guiado pelo seu treinador
         </div>
         <h1 className="disp" style={{ fontWeight: 900, fontSize: "clamp(34px, 8vw, 62px)", lineHeight: 1.02, letterSpacing: "-0.03em", color: TEXT, margin: 0 }}>
           Treinar ficou <span style={{ color: ACCENT }}>inteligente</span>.
         </h1>
         <p style={{ color: MUTE, fontSize: "clamp(15px, 2.4vw, 19px)", lineHeight: 1.55, margin: "20px auto 0", maxWidth: 620 }}>
-          Planos de corrida e triathlon que leem seu <b style={{ color: TEXT }}>Strava</b>, se ajustam à sua semana com <b style={{ color: TEXT }}>IA</b> e passam pela aprovação do seu <b style={{ color: TEXT }}>treinador</b>.
+          Planos de corrida e triathlon que leem seu <b style={{ color: TEXT }}>Strava</b>, se ajustam à sua semana automaticamente e passam pela aprovação do seu <b style={{ color: TEXT }}>treinador</b>.
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 30 }}>
           <button onClick={onStart} style={{ ...btn.solid, padding: "14px 26px", fontSize: 15 }}>Começar agora <ChevronRight size={17} /></button>
@@ -702,11 +702,11 @@ function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogo
             <div style={{ ...card.base, marginBottom: 18, border: "1px solid rgba(168,85,247,0.5)" }}>
               <SectionTitle>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                  <Sparkles size={15} color="#c084fc" /> Propostas da IA aguardando aprovação <Badge c="#c084fc">{proposals.length}</Badge>
+                  <Calendar size={15} color="#c084fc" /> Propostas de plano aguardando aprovação <Badge c="#c084fc">{proposals.length}</Badge>
                 </span>
               </SectionTitle>
               <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 12 }}>
-                A IA analisou a semana e montou o próximo bloco desses alunos. Revise e aprove pra cair no plano deles.
+                O próximo bloco desses alunos foi montado a partir da semana treinada. Revise e aprove pra cair no plano deles.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {proposals.map((p) => {
@@ -714,7 +714,7 @@ function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogo
                   return (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 12, flexWrap: "wrap" }}>
                       <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(168,85,247,0.14)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                        <Sparkles size={16} color="#c084fc" />
+                        <Calendar size={16} color="#c084fc" />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="disp" style={{ fontSize: 14, color: TEXT }}>{a?.full_name || a?.email || "atleta"}</div>
@@ -1270,7 +1270,7 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
       const { data, error } = await api.aiRecalibrate(buildAiPayload(athlete, workouts));
       if (error) { let d = error.message; try { const b = await error.context?.json?.(); if (b?.error) d = b.error; } catch (e) {} throw new Error(d); }
       if (data?.error) throw new Error(data.error);
-      const r = data?.result; if (!r) throw new Error("Resposta vazia da IA");
+      const r = data?.result; if (!r) throw new Error("Não foi possível gerar a proposta agora");
       const { error: e2 } = await api.createProposal({ athlete_id: athlete.id, coach_id: coachId, week_start: nextMondayISO(), status: "pending", source: "manual", analysis: r.analise, adherence: r.aderencia || null, workouts: r.ajustes || [] });
       if (e2) throw new Error(e2.message);
       await load();
@@ -1298,7 +1298,7 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
 
   return (
     <div style={{ ...card.base, marginBottom: 16, borderColor: prop ? "rgba(168,85,247,0.6)" : "rgba(168,85,247,0.35)" }}>
-      <SectionTitle><Sparkles size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#c084fc" }} />Recalibração com IA (Gemini)</SectionTitle>
+      <SectionTitle><Calendar size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#c084fc" }} />Plano da próxima semana</SectionTitle>
 
       {prop === undefined ? (
         <div style={{ fontSize: 12.5, color: MUTE }}>carregando…</div>
@@ -1334,11 +1334,11 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
       ) : (
         <>
           <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
-            A IA analisa a semana treinada e monta a proposta do próximo bloco <b style={{ color: TEXT }}>automaticamente todo domingo à noite</b>.
+            A proposta do próximo bloco é montada a partir da semana treinada, <b style={{ color: TEXT }}>automaticamente todo domingo à noite</b>.
             Quando chegar, você aprova aqui e ela cai no plano do aluno. Sem proposta pendente no momento.
           </p>
           <button disabled={busy} onClick={generateNow} style={{ ...btn.outline, opacity: busy ? 0.6 : 1 }}>
-            <Sparkles size={15} /> {busy ? "gerando…" : "Gerar proposta agora"}
+            <Calendar size={15} /> {busy ? "gerando…" : "Gerar proposta agora"}
           </button>
         </>
       )}
