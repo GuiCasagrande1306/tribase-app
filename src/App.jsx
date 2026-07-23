@@ -263,7 +263,13 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [recovery, setRecovery] = useState(false);
   const [stravaToast, setStravaToast] = useState(null);
-  const [showAuth, setShowAuth] = useState(false);
+  const [route, setRoute] = useState(typeof window !== "undefined" ? window.location.pathname : "/");
+  const navigate = useCallback((to) => { window.history.pushState({}, "", to); setRoute(to); }, []);
+  useEffect(() => {
+    const onPop = () => setRoute(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const refreshProfile = useCallback(async () => {
     const p = await api.myProfile();
@@ -305,6 +311,11 @@ export default function App() {
     })();
   }, [session, refreshProfile]);
 
+  // ao logar, limpa a URL de /login para /
+  useEffect(() => {
+    if (session && window.location.pathname === "/login") { window.history.replaceState({}, "", "/"); setRoute("/"); }
+  }, [session]);
+
   return (
     <div style={shell.root}>
       <style>{FONTS}</style>
@@ -322,7 +333,7 @@ export default function App() {
         ) : (
           <>
             {recovery && <ResetPassword onDone={() => setRecovery(false)} onCancel={async () => { setRecovery(false); await supabase.auth.signOut(); }} />}
-            {!recovery && !session && (showAuth ? <Auth onBack={() => setShowAuth(false)} /> : <Landing onStart={() => setShowAuth(true)} />)}
+            {!recovery && !session && (route === "/login" ? <Auth onBack={() => navigate("/")} /> : <Landing onStart={() => navigate("/login")} />)}
             {!recovery && session && !ready && <Center>carregando…</Center>}
             {!recovery && session && ready && profile && profile.role === "coach" && (
               <CoachArea profile={profile} onLogout={() => supabase.auth.signOut()} />
