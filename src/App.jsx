@@ -201,7 +201,11 @@ const demoApi = {
   addWorkouts: async (rows) => { rows.forEach((r) => demoWorkouts.push(_row(r))); return _ok; },
   updateWorkout: async (id, fields) => { const w = demoWorkouts.find((x) => x.id === id); if (w) Object.assign(w, fields); return _ok; },
   deleteWorkout: async (id) => { const i = demoWorkouts.findIndex((x) => x.id === id); if (i >= 0) demoWorkouts.splice(i, 1); return _ok; },
-  aiRecalibrate: async () => ({ data: { ok: true, result: { analise: "Modo demo: exemplo de análise. Aderência boa, sem sinais de fadiga — leve progressão sugerida.", aderencia: "demo", ajustes: [] } }, error: null }),
+  aiRecalibrate: async () => ({ data: { ok: true, result: { analise: "Modo demo: exemplo de análise.", aderencia: "demo", ajustes: [] } }, error: null }),
+  proposalForAthlete: async () => null,
+  pendingProposals: async () => [],
+  createProposal: async () => _ok,
+  decideProposal: async () => _ok,
   stravaStatus: async () => null,
   stravaConnect: async () => ({ data: { ok: true }, error: null }),
   stravaSync: async () => ({ data: { ok: true, matched: 0, inserted: 0, skipped: 0 }, error: null }),
@@ -232,6 +236,10 @@ const supaApi = {
   updateWorkout: async (id, fields) => supabase.from("workouts").update(fields).eq("id", id),
   deleteWorkout: async (id) => supabase.from("workouts").delete().eq("id", id),
   aiRecalibrate: async (payload) => supabase.functions.invoke("ai-recalibrate", { body: payload }),
+  proposalForAthlete: async (athleteId) => (await supabase.from("ai_proposals").select("id,week_start,analysis,adherence,workouts,created_at,source").eq("athlete_id", athleteId).eq("status", "pending").order("created_at", { ascending: false }).limit(1).maybeSingle()).data,
+  pendingProposals: async () => (await supabase.from("ai_proposals").select("id,athlete_id,week_start,created_at").eq("status", "pending")).data || [],
+  createProposal: async (row) => supabase.from("ai_proposals").insert(row),
+  decideProposal: async (id, status) => supabase.from("ai_proposals").update({ status, decided_at: new Date().toISOString() }).eq("id", id),
   stravaStatus: async () => {
     const { data: u } = await supabase.auth.getUser();
     if (!u?.user) return null;
@@ -579,6 +587,8 @@ function raceColor(days) { return days == null ? MUTE : days <= 21 ? "#ff5a3c" :
 export function adherColor(p) { return p == null ? MUTE : p >= 80 ? "#a3e635" : p >= 50 ? "#f5a524" : "#ff5a3c"; }
 
 function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogout, viewSwitch = null }) {
+  const [proposals, setProposals] = useState([]);
+  useEffect(() => { (async () => setProposals(await api.pendingProposals()))(); }, [athletes.length]);
   const list = athletes.map((a) => ({ a, s: stats[a.id] || {} }));
   const sorted = [...list].sort((x, y) =>
     (y.s.needsAttention ? 1 : 0) - (x.s.needsAttention ? 1 : 0) || (x.s.daysToRace ?? 9999) - (y.s.daysToRace ?? 9999));
@@ -599,6 +609,36 @@ function CoachHome({ profile, athletes, stats, loading, reload, onManage, onLogo
             <Stat label="Aderência média" value={avgAdher == null ? "—" : `${avgAdher}%`} unit="dos atletas" color={adherColor(avgAdher)} />
             <Stat label="Precisam de atenção" value={attention} unit="atleta(s)" color={attention ? "#ff5a3c" : "#a3e635"} icon={AlertTriangle} />
           </div>
+
+          {proposals.length > 0 && (
+            <div style={{ ...card.base, marginBottom: 18, border: "1px solid rgba(168,85,247,0.5)" }}>
+              <SectionTitle>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                  <Sparkles size={15} color="#c084fc" /> Propostas da IA aguardando aprovação <Badge c="#c084fc">{proposals.length}</Badge>
+                </span>
+              </SectionTitle>
+              <p style={{ color: MUTE, fontSize: 12.5, marginBottom: 12 }}>
+                A IA analisou a semana e montou o próximo bloco desses alunos. Revise e aprove pra cair no plano deles.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {proposals.map((p) => {
+                  const a = athletes.find((x) => x.id === p.athlete_id);
+                  return (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 12, flexWrap: "wrap" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(168,85,247,0.14)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <Sparkles size={16} color="#c084fc" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="disp" style={{ fontSize: 14, color: TEXT }}>{a?.full_name || a?.email || "atleta"}</div>
+                        <div className="mono" style={{ fontSize: 11.5, color: MUTE }}>proposta da semana de {p.week_start ? dm(toDate(p.week_start)) : "?"}</div>
+                      </div>
+                      <button onClick={() => onManage(p.athlete_id)} style={btn.solid}>revisar <ChevronRight size={14} /></button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {athletes.length === 0 ? <Empty>Nenhum aluno ainda. Assim que alguém criar a conta, aparece aqui automaticamente.</Empty> : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
@@ -1126,101 +1166,93 @@ function CoachPlanBrief({ athlete, workouts }) {
 }
 
 /* ================= Recalibração com IA (Gemini) ================= */
+function nextMondayISO() { const dow = new Date().getDay(); const add = ((8 - dow) % 7) || 7; return addDays(todayISO(), add); }
+
 function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
+  const [prop, setProp] = useState(undefined); // undefined=carregando, null=sem proposta, obj=pendente
   const [busy, setBusy] = useState(false);
-  const [res, setRes] = useState(null);   // { analise, aderencia, ajustes }
   const [msg, setMsg] = useState(null);
-  const [applied, setApplied] = useState(false);
 
-  const doneCount = (workouts || []).filter((w) => w.status === "concluído" && w.date >= addDays(todayISO(), -14)).length;
+  const load = useCallback(async () => { setProp(await api.proposalForAthlete(athlete.id)); }, [athlete.id]);
+  useEffect(() => { load(); }, [load]);
 
-  const run = async () => {
-    setBusy(true); setMsg(null); setRes(null); setApplied(false);
+  const generateNow = async () => {
+    setBusy(true); setMsg(null);
     try {
-      const payload = buildAiPayload(athlete, workouts);
-      const { data, error } = await api.aiRecalibrate(payload);
-      if (error) {
-        // tenta extrair a mensagem do corpo da função (FunctionsHttpError)
-        let detail = error.message || "Falha ao chamar a IA";
-        try { const b = await error.context?.json?.(); if (b?.error) detail = b.error; } catch (e) {}
-        throw new Error(detail);
-      }
+      const { data, error } = await api.aiRecalibrate(buildAiPayload(athlete, workouts));
+      if (error) { let d = error.message; try { const b = await error.context?.json?.(); if (b?.error) d = b.error; } catch (e) {} throw new Error(d); }
       if (data?.error) throw new Error(data.error);
-      const r = data?.result;
-      if (!r) throw new Error("Resposta vazia da IA");
-      setRes(r);
+      const r = data?.result; if (!r) throw new Error("Resposta vazia da IA");
+      const { error: e2 } = await api.createProposal({ athlete_id: athlete.id, coach_id: coachId, week_start: nextMondayISO(), status: "pending", source: "manual", analysis: r.analise, adherence: r.aderencia || null, workouts: r.ajustes || [] });
+      if (e2) throw new Error(e2.message);
+      await load();
     } catch (e) { setMsg({ ok: false, t: e.message || "Erro" }); }
     setBusy(false);
   };
 
-  const apply = async () => {
-    const ajustes = (res?.ajustes || []).filter((a) => a && a.date && a.discipline);
-    if (!ajustes.length) return;
+  const approve = async () => {
+    const ajustes = (prop?.workouts || []).filter((a) => a && a.date && a.discipline);
+    if (!ajustes.length) { await api.decideProposal(prop.id, "approved"); await load(); return; }
     setBusy(true); setMsg(null);
-    const payload = ajustes.map((a) => ({
+    const rows = ajustes.map((a) => ({
       athlete_id: athlete.id, coach_id: coachId, date: a.date, discipline: a.discipline, type: a.type || "Treino",
       duration_min: Number(a.duration_min) || 0, distance: Number(a.distance) || 0, dist_unit: a.dist_unit || "km",
       target: a.target || null, notes: a.notes || null, status: "planejado",
     }));
-    const { error } = await api.addWorkouts(payload);
-    if (error) setMsg({ ok: false, t: error.message });
-    else { setApplied(true); setMsg({ ok: true, t: `${payload.length} treino(s) aplicados ao plano!` }); onApplied && onApplied(); }
-    setBusy(false);
+    const { error } = await api.addWorkouts(rows);
+    if (error) { setMsg({ ok: false, t: error.message }); setBusy(false); return; }
+    await api.decideProposal(prop.id, "approved");
+    setMsg({ ok: true, t: `${rows.length} treino(s) aplicados ao plano do aluno!` });
+    onApplied && onApplied(); await load(); setBusy(false);
   };
 
+  const reject = async () => { setBusy(true); setMsg(null); await api.decideProposal(prop.id, "rejected"); await load(); setBusy(false); };
+
   return (
-    <div style={{ ...card.base, marginBottom: 16, borderColor: "rgba(168,85,247,0.35)" }}>
-      <SectionTitle><Sparkles size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#c084fc" }} />Recalibrar com IA (Gemini)</SectionTitle>
-      <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
-        A IA analisa a <b style={{ color: TEXT }}>última semana treinada</b> (planejado × realizado, FC e RPE) e
-        <b style={{ color: TEXT }}> sugere os treinos da próxima semana</b>, ajustados à performance e à fadiga.
-        Você revisa e aplica com 1 clique.
-      </p>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <button disabled={busy} onClick={run} style={{ ...btn.solid, background: "linear-gradient(90deg,#a855f7,#7c3aed)", opacity: busy ? 0.6 : 1 }}>
-          <Sparkles size={15} /> {busy && !res ? "analisando…" : "Analisar a semana com IA"}
-        </button>
-        <span style={{ fontSize: 12, color: MUTE }} className="mono">{doneCount} treino(s) concluídos nas últimas 2 sem</span>
-      </div>
+    <div style={{ ...card.base, marginBottom: 16, borderColor: prop ? "rgba(168,85,247,0.6)" : "rgba(168,85,247,0.35)" }}>
+      <SectionTitle><Sparkles size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#c084fc" }} />Recalibração com IA (Gemini)</SectionTitle>
 
-      {res && (
-        <div style={{ marginTop: 14 }}>
-          {res.aderencia && <div style={{ fontSize: 12.5, color: "#c084fc", marginBottom: 6 }} className="mono">Aderência: {res.aderencia}</div>}
-          <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", whiteSpace: "pre-wrap" }}>
-            {res.analise}
+      {prop === undefined ? (
+        <div style={{ fontSize: 12.5, color: MUTE }}>carregando…</div>
+      ) : prop ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <Badge c="#c084fc">Proposta pendente</Badge>
+            <span className="mono" style={{ fontSize: 11.5, color: MUTE }}>semana de {prop.week_start ? dm(toDate(prop.week_start)) : "?"} · {prop.source === "auto" ? "gerada domingo" : "gerada agora"}{prop.adherence ? ` · aderência ${prop.adherence}` : ""}</span>
           </div>
-
-          {(res.ajustes || []).length > 0 ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-                <span className="mono" style={{ fontSize: 12, color: MUTE }}>Sugestão · {res.ajustes.length} treino(s) para a próxima semana</span>
-                {!applied && (
-                  <button disabled={busy} onClick={apply} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}>
-                    <Plus size={16} /> {busy ? "aplicando…" : `Aplicar ${res.ajustes.length} treinos`}
-                  </button>
-                )}
-                {applied && <span style={{ fontSize: 12.5, color: "#a3e635" }}><CheckCircle2 size={14} style={{ verticalAlign: "-2px" }} /> aplicados</span>}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflow: "auto" }}>
-                {res.ajustes.map((w, i) => {
-                  const meta = DISC[w.discipline] || DISC["Corrida"];
-                  const Icon = meta.icon;
-                  return (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10 }}>
-                      <Icon size={15} color={meta.c} />
-                      <span className="mono" style={{ fontSize: 11, color: MUTE, width: 44 }}>{w.date ? dm(toDate(w.date)) : "?"}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: meta.c, width: 64 }}>{w.discipline}</span>
-                      <span className="disp" style={{ flex: 1, fontSize: 13, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.type}{w.target ? ` · ${w.target}` : ""}</span>
-                      <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.duration_min ? fmtDur(w.duration_min) : ""}{w.distance ? ` · ${w.distance}${w.dist_unit || ""}` : ""}</span>
-                    </div>
-                  );
-                })}
-              </div>
+          <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10, padding: "10px 12px", whiteSpace: "pre-wrap" }}>{prop.analysis}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "12px 0 8px", flexWrap: "wrap", gap: 8 }}>
+            <span className="mono" style={{ fontSize: 12, color: MUTE }}>{(prop.workouts || []).length} treino(s) sugeridos</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button disabled={busy} onClick={reject} style={btn.ghost}><X size={14} /> descartar</button>
+              <button disabled={busy} onClick={approve} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}><CheckCircle2 size={16} /> {busy ? "aplicando…" : "Aprovar e aplicar"}</button>
             </div>
-          ) : (
-            <div style={{ fontSize: 12.5, color: MUTE, marginTop: 10 }}>A IA não propôs novos treinos desta vez (veja a análise acima).</div>
-          )}
-        </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflow: "auto" }}>
+            {(prop.workouts || []).map((w, i) => {
+              const meta = DISC[w.discipline] || DISC["Corrida"]; const Icon = meta.icon;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10 }}>
+                  <Icon size={15} color={meta.c} />
+                  <span className="mono" style={{ fontSize: 11, color: MUTE, width: 44 }}>{w.date ? dm(toDate(w.date)) : "?"}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: meta.c, width: 64 }}>{w.discipline}</span>
+                  <span className="disp" style={{ flex: 1, fontSize: 13, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.type}{w.target ? ` · ${w.target}` : ""}</span>
+                  <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.duration_min ? fmtDur(w.duration_min) : ""}{w.distance ? ` · ${w.distance}${w.dist_unit || ""}` : ""}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <>
+          <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
+            A IA analisa a semana treinada e monta a proposta do próximo bloco <b style={{ color: TEXT }}>automaticamente todo domingo à noite</b>.
+            Quando chegar, você aprova aqui e ela cai no plano do aluno. Sem proposta pendente no momento.
+          </p>
+          <button disabled={busy} onClick={generateNow} style={{ ...btn.outline, opacity: busy ? 0.6 : 1 }}>
+            <Sparkles size={15} /> {busy ? "gerando…" : "Gerar proposta agora"}
+          </button>
+        </>
       )}
       {msg && <div style={{ fontSize: 12.5, marginTop: 10, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
     </div>
