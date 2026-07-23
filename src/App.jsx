@@ -681,17 +681,21 @@ const DIST_BY_MOD = {
 function RaceDataCard({ athlete, onSaved }) {
   const [info, setInfo] = useState({
     modality: athlete?.modality || "", race: athlete?.race || "", race_date: athlete?.race_date || "",
-    days_per_week: athlete?.days_per_week || "", goal: athlete?.goal || "",
+    days_per_week: athlete?.days_per_week || "", goal: athlete?.goal || "", plan_weeks: athlete?.plan_weeks || "",
   });
+  const [mode, setMode] = useState(athlete?.plan_weeks ? "weeks" : "date"); // data fixa vs plano de N semanas
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState(null);
   const distOpts = DIST_BY_MOD[info.modality] || [];
   const save = async () => {
     setErr(null);
+    const weeksPlan = mode === "weeks" && info.plan_weeks;
     const payload = {
       modality: info.modality || null,
       race: info.race || null,
-      race_date: info.race_date || null,      // vazio -> null (coluna date não aceita "")
+      // plano de N semanas -> data-alvo = hoje + N semanas; senão a data escolhida
+      race_date: weeksPlan ? addDays(todayISO(), Number(info.plan_weeks) * 7) : (info.race_date || null),
+      plan_weeks: weeksPlan ? Number(info.plan_weeks) : null,
       days_per_week: info.days_per_week ? Number(info.days_per_week) : null,
       goal: info.goal || null,
     };
@@ -699,6 +703,10 @@ function RaceDataCard({ athlete, onSaved }) {
     if (error) { setErr(error.message || "Erro ao salvar"); return; }
     setSaved(true); setTimeout(() => setSaved(false), 1500); onSaved && onSaved();
   };
+  const tglBtn = (on) => ({
+    flex: 1, padding: "6px 0", borderRadius: 9, cursor: "pointer", fontSize: 11.5, fontWeight: 600,
+    border: `1px solid ${on ? ACCENT : LINE}`, background: on ? "rgba(255,90,60,0.12)" : PANEL2, color: on ? "#ffd9cf" : MUTE,
+  });
   return (
     <div style={{ ...card.base, marginBottom: 16 }}>
       <SectionTitle>Objetivo e disponibilidade</SectionTitle>
@@ -722,7 +730,18 @@ function RaceDataCard({ athlete, onSaved }) {
             {[3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n} dias</option>)}
           </select>
         </Field>
-        <Field label="Data da prova"><input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} /></Field>
+        <Field label="Data da prova ou plano">
+          <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+            <button type="button" onClick={() => setMode("date")} style={tglBtn(mode === "date")}>Data da prova</button>
+            <button type="button" onClick={() => setMode("weeks")} style={tglBtn(mode === "weeks")}>Plano de semanas</button>
+          </div>
+          {mode === "date"
+            ? <input type="date" style={inp.base} value={info.race_date || ""} onChange={(e) => setInfo({ ...info, race_date: e.target.value })} />
+            : <select style={inp.base} value={info.plan_weeks} onChange={(e) => setInfo({ ...info, plan_weeks: e.target.value })}>
+                <option value="">Selecione…</option>
+                {[12, 16, 20, 24].map((w) => <option key={w} value={w}>{w} semanas</option>)}
+              </select>}
+        </Field>
         <Field label="Tempo-objetivo (opcional)"><GoalTimePicker value={info.goal} onChange={(g) => setInfo({ ...info, goal: g })} /></Field>
       </div>
       <button onClick={save} style={btn.outline}>{saved ? "salvo!" : "Salvar dados"}</button>
