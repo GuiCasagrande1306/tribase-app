@@ -263,6 +263,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [recovery, setRecovery] = useState(false);
   const [stravaToast, setStravaToast] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
 
   const refreshProfile = useCallback(async () => {
     const p = await api.myProfile();
@@ -321,7 +322,7 @@ export default function App() {
         ) : (
           <>
             {recovery && <ResetPassword onDone={() => setRecovery(false)} onCancel={async () => { setRecovery(false); await supabase.auth.signOut(); }} />}
-            {!recovery && !session && <Auth />}
+            {!recovery && !session && (showAuth ? <Auth onBack={() => setShowAuth(false)} /> : <Landing onStart={() => setShowAuth(true)} />)}
             {!recovery && session && !ready && <Center>carregando…</Center>}
             {!recovery && session && ready && profile && profile.role === "coach" && (
               <CoachArea profile={profile} onLogout={() => supabase.auth.signOut()} />
@@ -381,8 +382,92 @@ function DemoRoleToggle({ role, setRole }) {
   );
 }
 
+/* ================= Landing (pré-login) ================= */
+function Landing({ onStart }) {
+  const narrow = useMediaQuery("(max-width: 640px)");
+  const features = [
+    { icon: Sparkles, c: "#c084fc", t: "IA que recalibra sua semana", d: "Todo domingo à noite o Gemini analisa seus treinos e monta o próximo bloco, ajustado à sua performance e fadiga." },
+    { icon: Activity, c: "#fc5200", t: "Strava sincronizado", d: "Conecte sua conta e os treinos entram sozinhos — com FC, pace, potência e elevação. Sem planilha." },
+    { icon: Users, c: "#22d3ee", t: "Treinador no comando", d: "Nada vai pro seu plano sem o seu treinador revisar e aprovar. IA que assiste, humano que decide." },
+    { icon: Gauge, c: "#a3e635", t: "Zonas e intervalos", d: "Sessões estruturadas com zonas de FC e ritmos-alvo, séries e tiros — nada de achismo." },
+    { icon: Layers, c: "#f5a524", t: "Corrida, nado, bike e triathlon", d: "Plano periodizado pra sua modalidade e prova, do 5 km ao Ironman, base ao pico." },
+    { icon: TrendingUp, c: "#ff5a3c", t: "Evolução visível", d: "Aderência, volume e ganhos semana a semana. Você vê o progresso, não só sente." },
+  ];
+  const steps = [
+    { n: "1", t: "Crie sua conta", d: "Rápido e grátis, com sua conta Google." },
+    { n: "2", t: "Conecte o Strava e defina o objetivo", d: "Modalidade, prova ou plano de semanas — a IA lê seu histórico." },
+    { n: "3", t: "Receba seu plano e treine", d: "A IA propõe, o treinador aprova, você segue. Toda semana." },
+  ];
+  const H = narrow ? 15 : 20;
+  return (
+    <div style={{ maxWidth: 1040, margin: "0 auto", padding: `calc(20px + env(safe-area-inset-top)) ${H}px 60px` }} className="rise">
+      {/* nav */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: narrow ? 40 : 70 }}>
+        <Logo compact={narrow} />
+        <button onClick={onStart} style={btn.outline}>Entrar</button>
+      </div>
+
+      {/* hero */}
+      <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#c084fc", background: "rgba(192,132,252,0.1)", border: "1px solid rgba(192,132,252,0.35)", borderRadius: 20, padding: "6px 14px", marginBottom: 22 }}>
+          <Sparkles size={13} /> Treino guiado por IA + seu treinador
+        </div>
+        <h1 className="disp" style={{ fontWeight: 900, fontSize: "clamp(34px, 8vw, 62px)", lineHeight: 1.02, letterSpacing: "-0.03em", color: TEXT, margin: 0 }}>
+          Treinar ficou <span style={{ color: ACCENT }}>inteligente</span>.
+        </h1>
+        <p style={{ color: MUTE, fontSize: "clamp(15px, 2.4vw, 19px)", lineHeight: 1.55, margin: "20px auto 0", maxWidth: 620 }}>
+          Planos de corrida e triathlon que leem seu <b style={{ color: TEXT }}>Strava</b>, se ajustam à sua semana com <b style={{ color: TEXT }}>IA</b> e passam pela aprovação do seu <b style={{ color: TEXT }}>treinador</b>.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 30 }}>
+          <button onClick={onStart} style={{ ...btn.solid, padding: "14px 26px", fontSize: 15 }}>Começar agora <ChevronRight size={17} /></button>
+          <button onClick={onStart} style={{ ...btn.outline, padding: "14px 22px", fontSize: 14 }}>Já tenho conta</button>
+        </div>
+      </div>
+
+      {/* features */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))", gap: 14, marginTop: narrow ? 56 : 90 }}>
+        {features.map((f, i) => (
+          <div key={i} style={{ ...card.base }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: `${f.c}1a`, border: `1px solid ${f.c}44`, display: "grid", placeItems: "center", marginBottom: 12 }}>
+              <f.icon size={20} color={f.c} />
+            </div>
+            <div className="disp" style={{ fontWeight: 800, fontSize: 16, color: TEXT, letterSpacing: "-0.01em" }}>{f.t}</div>
+            <div style={{ color: MUTE, fontSize: 13.5, lineHeight: 1.55, marginTop: 6 }}>{f.d}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* how it works */}
+      <div style={{ marginTop: narrow ? 56 : 90, textAlign: "center" }}>
+        <h2 className="disp" style={{ fontWeight: 900, fontSize: "clamp(24px, 5vw, 36px)", letterSpacing: "-0.02em", color: TEXT }}>Como funciona</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14, marginTop: 26, textAlign: "left" }}>
+          {steps.map((s) => (
+            <div key={s.n} style={{ ...card.base }}>
+              <div className="disp" style={{ fontWeight: 900, fontSize: 30, color: ACCENT, lineHeight: 1 }}>{s.n}</div>
+              <div className="disp" style={{ fontWeight: 800, fontSize: 16, color: TEXT, marginTop: 10 }}>{s.t}</div>
+              <div style={{ color: MUTE, fontSize: 13.5, lineHeight: 1.55, marginTop: 5 }}>{s.d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* CTA final */}
+      <div style={{ ...card.base, marginTop: narrow ? 56 : 90, textAlign: "center", padding: narrow ? "34px 20px" : "52px 24px", background: "linear-gradient(160deg, rgba(255,90,60,0.14), rgba(192,132,252,0.07))", borderColor: "rgba(255,90,60,0.3)" }}>
+        <h2 className="disp" style={{ fontWeight: 900, fontSize: "clamp(24px, 5vw, 38px)", letterSpacing: "-0.02em", color: TEXT, margin: 0 }}>Pronto pra treinar melhor?</h2>
+        <p style={{ color: MUTE, fontSize: 15, marginTop: 12 }}>Crie sua conta e receba seu primeiro plano.</p>
+        <button onClick={onStart} style={{ ...btn.solid, padding: "14px 28px", fontSize: 15, marginTop: 22 }}>Começar agora <ChevronRight size={17} /></button>
+      </div>
+
+      <div style={{ textAlign: "center", color: MUTE, fontSize: 12, marginTop: 40, lineHeight: 1.6 }}>
+        TRIBASE · sua base de treinos<br />
+        Orientação de treino baseada em ciência do esporte — não substitui aconselhamento médico.
+      </div>
+    </div>
+  );
+}
+
 /* ================= Auth ================= */
-function Auth() {
+function Auth({ onBack }) {
   const [mode, setMode] = useState("in");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -422,7 +507,10 @@ function Auth() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: "0 auto", padding: "70px 22px" }} className="rise">
+    <div style={{ maxWidth: 420, margin: "0 auto", padding: "40px 22px 70px" }} className="rise">
+      {onBack && (
+        <button onClick={onBack} style={{ ...btn.ghost, marginBottom: 18 }}><ChevronLeft size={15} /> voltar</button>
+      )}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}><Logo big /></div>
       <p style={{ textAlign: "center", color: MUTE, fontSize: 13.5, marginBottom: 26 }}>
         Sua base de treinos de triathlon
@@ -456,7 +544,7 @@ function Auth() {
         )}
       </div>
       <p style={{ textAlign: "center", color: MUTE, fontSize: 11.5, marginTop: 18, lineHeight: 1.5 }}>
-        Treinador cria a conta e ativa o modo treinador. Atleta cria a conta e compartilha o email com o treinador para ser vinculado.
+        Crie sua conta com email <b style={{ color: TEXT }}>@gmail.com</b> — você já entra vinculado ao seu treinador.
         {mode === "up" && <><br /><b style={{ color: "#ffd9cf" }}>O cadastro é aceito apenas com email @gmail.com.</b></>}
       </p>
     </div>
