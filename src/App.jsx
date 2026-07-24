@@ -287,7 +287,7 @@ export default function App() {
       const { data, error } = await api.stravaConnect(code);
       window.history.replaceState({}, "", window.location.pathname);
       if (error || data?.error) setStravaToast({ ok: false, t: "Falha ao conectar o Strava. Tente de novo." });
-      else setStravaToast({ ok: true, t: "Strava conectado! Abra a aba Importar para sincronizar." });
+      else setStravaToast({ ok: true, t: "Strava conectado! Seus treinos serão sincronizados." });
       setTimeout(() => setStravaToast(null), 6000);
     })();
   }, [session]);
@@ -1142,7 +1142,7 @@ function bestPaces(done) {
 // monta o payload enviado ao Gemini (Edge Function ai-recalibrate)
 function buildAiPayload(athlete, workouts) {
   const today = todayISO();
-  const from = addDays(today, -14);      // últimas 2 semanas para análise
+  const from = addDays(today, -30);      // últimos 30 dias para análise (Strava)
   const nextTo = addDays(today, 8);      // próxima semana planejada (se existir)
   const win = (workouts || []).filter((w) => w.date >= from);
   const compact = (w) => ({
@@ -1160,7 +1160,7 @@ function buildAiPayload(athlete, workouts) {
       meta: athlete?.goal || null, semanasParaProva: weeksToRace, treinosPorSemana: athlete?.days_per_week || null,
     },
     melhoresRitmos: bestPaces((workouts || []).filter((w) => w.status === "concluído")),
-    ultimasDuasSemanas: {
+    ultimos30Dias: {
       planejados: win.filter((w) => w.status !== "concluído" && w.date < today).map(compact),
       realizados: win.filter((w) => w.status === "concluído").map(compact),
     },
@@ -1360,45 +1360,74 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
 
 /* ================= Athlete ================= */
 /* ================= Boas-vindas (aluno recém-cadastrado, sem plano ainda) ================= */
-function WelcomeAthlete({ profile, onSaved }) {
-  const first = ((profile.full_name || "").trim().split(/\s+/)[0]) || "atleta";
-  const steps = [
-    { icon: Flag, c: "#ff5a3c", t: "Conte seu objetivo", d: "Preencha acima a modalidade, a distância-alvo, quantos treinos por semana você consegue e a data da prova. O resto (ritmos, FC, volume) a gente lê do seu Strava." },
-    { icon: FileText, c: "#c084fc", t: "Seu treinador monta o plano", d: "Em breve seus treinos aparecem aqui na Visão geral e no Calendário, com pace e observações." },
-    { icon: CheckCircle2, c: "#a3e635", t: "Treine e registre", d: "Marque cada treino como feito e dê sua nota de esforço (RPE). Conecte seu Strava em Configurações da conta pra os treinos entrarem sozinhos." },
-  ];
+function WelcomeAthlete({ profile }) {
+  const [prof, setProf] = useState(profile);
+  const [strava, setStrava] = useState(undefined); // undefined=carregando, null=não conectado, obj=conectado
+  const first = ((prof?.full_name || "").trim().split(/\s+/)[0]) || "atleta";
+  const refresh = useCallback(async () => {
+    const [p, s] = await Promise.all([api.myProfile(), api.stravaStatus()]);
+    if (p) setProf(p); setStrava(s);
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const ready = strava !== undefined;
+  const hasObjective = !!prof?.modality;
+  const hasStrava = !!strava;
+  const step = !hasObjective ? 1 : !hasStrava ? 2 : 3;
+  const stepMeta = [{ n: 1, label: "Objetivo" }, { n: 2, label: "Strava" }, { n: 3, label: "Plano" }];
+
   return (
     <div className="rise">
-      <div style={{ ...card.base, marginBottom: 16, textAlign: "center", padding: "32px 22px",
+      <div style={{ ...card.base, marginBottom: 16, textAlign: "center", padding: "28px 22px",
         background: "linear-gradient(160deg, rgba(255,90,60,0.12), rgba(192,132,252,0.06))", borderColor: "rgba(255,90,60,0.28)" }}>
-        <div style={{ fontSize: 36, lineHeight: 1, marginBottom: 8 }}>🎉</div>
-        <div className="disp" style={{ fontWeight: 900, fontSize: 27, color: TEXT, letterSpacing: "-0.02em", lineHeight: 1.05 }}>
-          Bem-vindo(a), {first}!
-        </div>
-        <p style={{ color: MUTE, fontSize: 14, lineHeight: 1.6, maxWidth: 470, margin: "10px auto 0" }}>
-          Que bom te ter no <b style={{ color: TEXT }}>TRIBASE</b>. Seu treinador já foi avisado e vai montar seu plano
-          personalizado. Enquanto isso, preencha sua prova-alvo abaixo pra ele começar com o pé direito.
-        </p>
-      </div>
-
-      <RaceDataCard athlete={profile} onSaved={onSaved} />
-
-      <div style={card.base}>
-        <SectionTitle>Como funciona</SectionTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
-          {steps.map((s, i) => (
-            <div key={i} style={{ display: "flex", gap: 13, alignItems: "flex-start" }}>
-              <div style={{ width: 38, height: 38, borderRadius: 11, background: `${s.c}1a`, border: `1px solid ${s.c}44`, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                <s.icon size={18} color={s.c} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div className="disp" style={{ fontWeight: 700, fontSize: 14.5, color: TEXT }}>{i + 1}. {s.t}</div>
-                <div style={{ color: MUTE, fontSize: 13, lineHeight: 1.55, marginTop: 2 }}>{s.d}</div>
-              </div>
-            </div>
-          ))}
+        <div style={{ fontSize: 34, lineHeight: 1, marginBottom: 6 }}>🎉</div>
+        <div className="disp" style={{ fontWeight: 900, fontSize: 26, color: TEXT, letterSpacing: "-0.02em" }}>Bem-vindo(a), {first}!</div>
+        <p style={{ color: MUTE, fontSize: 13.5, lineHeight: 1.55, maxWidth: 440, margin: "8px auto 0" }}>Só 3 passos pra receber seu plano personalizado.</p>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginTop: 18, flexWrap: "wrap" }}>
+          {stepMeta.map((s, i) => {
+            const done = step > s.n, active = step === s.n;
+            const c = done ? "#a3e635" : active ? ACCENT : MUTE;
+            return (
+              <React.Fragment key={s.n}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 13, display: "grid", placeItems: "center", fontSize: 12.5, fontWeight: 700,
+                    background: (done || active) ? `${c}22` : PANEL2, border: `1px solid ${c}`, color: c }}>{done ? <Check size={14} /> : s.n}</div>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: active ? TEXT : MUTE }}>{s.label}</span>
+                </div>
+                {i < 2 && <div style={{ width: 18, height: 1, background: LINE }} />}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
+
+      {step === 1 && (
+        <>
+          <div style={{ ...card.base, marginBottom: 16 }}>
+            <SectionTitle><Flag size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: ACCENT }} />Passo 1 · Seu objetivo</SectionTitle>
+            <p style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, margin: 0 }}>Escolha a modalidade, a distância-alvo, quantos treinos por semana você consegue e a data da prova (ou um plano de X semanas). O resto — ritmos, FC, volume — a gente lê do seu Strava.</p>
+          </div>
+          <RaceDataCard athlete={prof} onSaved={refresh} />
+        </>
+      )}
+      {step === 2 && ready && (
+        <>
+          <div style={{ ...card.base, marginBottom: 16 }}>
+            <SectionTitle><Activity size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#fc5200" }} />Passo 2 · Conecte o Strava</SectionTitle>
+            <p style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, margin: 0 }}>Conecte sua conta pra puxarmos seus treinos dos <b style={{ color: TEXT }}>últimos 30 dias</b> (FC, pace, distância). Sem histórico no Strava? Sem problema — começamos com uma base e evoluímos semana a semana.</p>
+          </div>
+          <StravaCard onSynced={refresh} />
+        </>
+      )}
+      {step === 3 && ready && (
+        <div style={{ ...card.base, textAlign: "center", padding: "34px 22px" }}>
+          <div style={{ fontSize: 34, marginBottom: 8 }}>✅</div>
+          <div className="disp" style={{ fontWeight: 900, fontSize: 22, color: TEXT }}>Tudo pronto, {first}!</div>
+          <p style={{ color: MUTE, fontSize: 14, lineHeight: 1.6, maxWidth: 460, margin: "10px auto 0" }}>
+            Objetivo definido e Strava conectado. Agora é com o seu <b style={{ color: TEXT }}>treinador</b>: ele vai montar seu plano a partir dos seus últimos 30 dias. Assim que aprovar, seus treinos aparecem aqui na Visão geral e no Calendário. Volte em breve! 🚀
+          </p>
+        </div>
+      )}
     </div>
   );
 }

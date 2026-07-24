@@ -30,9 +30,9 @@ const responseSchema = {
 };
 
 const SYSTEM = `Você é um treinador de triathlon/corrida experiente e baseado em ciência do esporte.
-Recebe os dados REAIS da última(s) semana(s) de um atleta (planejado × realizado, com FC, distância, ritmo e RPE) e o perfil/meta dele.
-Analise a semana e PROPONHA os treinos da PRÓXIMA semana, ajustados à performance e à fadiga.
-PRINCÍPIOS: distribuição polarizada (~80% fácil/20% forte); sobrecarga gradual (recue se aderência baixa ou sinais de fadiga; progrida ~5-10% se respondeu bem); VARIE o formato das sessões vs. a semana anterior; planeje EXATAMENTE "treinosPorSemana" sessões; respeite a MODALIDADE (Triathlon: nado/bike/corrida + brick e sábado com 2 modalidades/transição; Corrida/Natação/Ciclismo: foco só nesse esporte, sem brick); tire ritmos/FC dos dados reais (não invente); use as datas reais a partir de "hoje".
+Recebe os dados REAIS dos ÚLTIMOS 30 DIAS de um atleta (planejado × realizado, com FC, distância, ritmo e RPE, vindos do Strava) e o perfil/meta dele.
+Analise esses 30 dias e PROPONHA os treinos da PRÓXIMA semana, ajustados à performance e à fadiga.
+PRINCÍPIOS: ATLETA NOVO/SEM HISTÓRICO — se NÃO houver atividades realizadas nos últimos 30 dias, comece com uma SEMANA DE BASE (volume moderado/conservador, intensidade aeróbia leve Z2, sem tiros pesados) e evolua de forma gradual e consistente semana a semana; distribuição polarizada (~80% fácil/20% forte); sobrecarga gradual e consistente (recue se aderência baixa ou sinais de fadiga; progrida ~5-10% se respondeu bem); VARIE o formato das sessões vs. a semana anterior; planeje EXATAMENTE "treinosPorSemana" sessões; respeite a MODALIDADE (Triathlon: nado/bike/corrida + brick e sábado com 2 modalidades/transição; Corrida/Natação/Ciclismo: foco só nesse esporte, sem brick); tire ritmos/FC dos dados reais (não invente); use as datas reais a partir de "hoje".
 Escreva a "analise" em português, curta e direta (o treinador humano vai revisar). Devolva SOMENTE o JSON no schema.`;
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -101,13 +101,13 @@ Deno.serve(async (req) => {
       const all = ws || [];
       const compact = (w: any) => ({ data: w.date, modalidade: w.discipline, sessao: w.type, duracaoMin: w.duration_min || null, distancia: w.distance || null, unidade: w.dist_unit, ritmo: paceStr(w), fcMedia: w.avg_hr || null, rpe: w.rpe || null, status: w.status });
       const done = all.filter((w) => w.status === "concluído");
-      const win = all.filter((w) => w.date >= iso(new Date(Date.now() - 14 * 86400000)));
+      const win = all.filter((w) => w.date >= iso(new Date(Date.now() - 30 * 86400000)));
       const weeksToRace = a.race_date ? Math.max(0, Math.ceil((Date.parse(a.race_date) - Date.now()) / (86400000 * 7))) : null;
       const payload = {
         hoje: today,
         atleta: { nome: a.full_name || a.email, modalidade: a.modality || null, prova: a.race || null, dataProva: a.race_date || null, meta: a.goal || null, semanasParaProva: weeksToRace, treinosPorSemana: a.days_per_week || null },
         melhoresRitmos: bestPaces(done),
-        ultimasDuasSemanas: { planejados: win.filter((w) => w.status !== "concluído" && w.date < today).map(compact), realizados: win.filter((w) => w.status === "concluído").map(compact) },
+        ultimos30Dias: { planejados: win.filter((w) => w.status !== "concluído" && w.date < today).map(compact), realizados: win.filter((w) => w.status === "concluído").map(compact) },
       };
 
       const result = await gemini(payload);
