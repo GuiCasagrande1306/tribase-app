@@ -9,8 +9,7 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const CLIENT_ID = Deno.env.get("STRAVA_CLIENT_ID") || "";
 const CLIENT_SECRET = Deno.env.get("STRAVA_CLIENT_SECRET") || "";
-const DAYS = Number(Deno.env.get("STRAVA_SYNC_DAYS") || "45");
-const FIRST_DAYS = Number(Deno.env.get("STRAVA_FIRST_SYNC_DAYS") || "180"); // 1ª sincronização puxa mais histórico
+const DAYS = Number(Deno.env.get("STRAVA_SYNC_DAYS") || "30"); // só os últimos 30 dias
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -56,8 +55,7 @@ Deno.serve(async (req) => {
   }
 
   // busca atividades recentes (1ª sincronização puxa mais histórico)
-  const windowDays = acc.last_sync ? DAYS : FIRST_DAYS;
-  const after = Math.floor((Date.now() - windowDays * 86400000) / 1000);
+  const after = Math.floor((Date.now() - DAYS * 86400000) / 1000);
   const actRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?after=${after}&per_page=100`, {
     headers: { Authorization: `Bearer ${access}` },
   });

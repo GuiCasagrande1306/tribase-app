@@ -987,6 +987,45 @@ function EditWorkoutModal({ w, onClose, onSaved, onDelete }) {
   );
 }
 
+function RealizedWorkouts({ workouts }) {
+  const from = addDays(todayISO(), -30);
+  const done = (workouts || []).filter((w) => w.status === "concluído" && w.date >= from).sort((a, b) => b.date.localeCompare(a.date));
+  const byDisc = {};
+  done.forEach((w) => { const d = (byDisc[w.discipline] = byDisc[w.discipline] || { n: 0, km: 0, unit: w.distUnit }); d.n++; d.km += w.distance || 0; d.unit = w.distUnit; });
+  const totalMin = sum(done.map((w) => w.durationMin));
+  return (
+    <div style={{ ...card.base, marginBottom: 16 }}>
+      <SectionTitle><Activity size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#fc5200" }} />Treinos realizados · últimos 30 dias</SectionTitle>
+      {done.length === 0 ? (
+        <p style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, margin: 0 }}>Nenhum treino realizado nos últimos 30 dias. Assim que o aluno treinar (com o Strava conectado), aparece aqui automaticamente.</p>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 12, fontSize: 12.5 }} className="mono">
+            <span style={{ color: "#a3e635" }}>{done.length} treino(s)</span>
+            <span style={{ color: "#22d3ee" }}>{fmtDur(totalMin)} no total</span>
+            {Object.entries(byDisc).map(([d, v]) => <span key={d} style={{ color: DISC[d]?.c || MUTE }}>{d.slice(0, 3)} {v.n}× · {+v.km.toFixed(1)}{v.unit}</span>)}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 360, overflow: "auto" }}>
+            {done.map((w) => {
+              const meta = DISC[w.discipline] || DISC["Corrida"]; const Icon = meta.icon;
+              return (
+                <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10, flexWrap: "wrap" }}>
+                  <Icon size={15} color={meta.c} />
+                  <span className="mono" style={{ fontSize: 11, color: MUTE, width: 44 }}>{dm(toDate(w.date))}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: meta.c, width: 58 }}>{w.discipline}</span>
+                  <span className="disp" style={{ flex: 1, minWidth: 90, fontSize: 12.5, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.type}</span>
+                  <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.durationMin ? fmtDur(w.durationMin) : ""}{w.distance ? ` · ${w.distance}${w.distUnit}` : ""}{paceStr(w) ? ` · ${paceStr(w)}` : ""}{w.avgHr ? ` · ${w.avgHr}bpm` : ""}</span>
+                  {w.source === "strava" && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fc5200", background: "rgba(252,82,0,0.12)", border: "1px solid rgba(252,82,0,0.4)", borderRadius: 6, padding: "1px 5px" }}>Strava</span>}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ManageAthlete({ coachId, athlete, onBack }) {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1010,6 +1049,7 @@ function ManageAthlete({ coachId, athlete, onBack }) {
     <Frame title={athlete.full_name || athlete.email} subtitle="Gerenciar treinos" onExit={onBack} exitLabel="voltar" backIcon>
       <RaceDataCard athlete={athlete} />
       {!loading && <Suspense fallback={<Empty>carregando…</Empty>}><PlanVsActual workouts={workouts} title="Planejado × cumprido do atleta" /></Suspense>}
+      {!loading && <RealizedWorkouts workouts={workouts} />}
       <AiRecalibrate coachId={coachId} athlete={athlete} workouts={workouts} onApplied={load} />
       <NewWorkoutForm coachId={coachId} athleteId={athlete.id} onAdded={load} />
       {loading ? <Empty>carregando…</Empty> : (
