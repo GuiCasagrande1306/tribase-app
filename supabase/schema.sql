@@ -172,9 +172,15 @@ revoke update on public.profiles from anon, authenticated;
 grant update (email, full_name, race, race_date, goal) on public.profiles to authenticated;
 
 -- WORKOUTS: atleta vê os seus; treinador vê os dos seus atletas
+-- SELECT: o atleta vê os seus; o treinador vê TODOS os treinos dos seus atletas
+-- (inclusive os sincronizados do Strava, que entram com coach_id null).
 drop policy if exists workouts_select on public.workouts;
 create policy workouts_select on public.workouts for select
-  using ( athlete_id = auth.uid() or coach_id = auth.uid() );
+  using (
+    athlete_id = auth.uid()
+    or coach_id = auth.uid()
+    or exists (select 1 from public.profiles p where p.id = workouts.athlete_id and p.coach_id = auth.uid())
+  );
 
 drop policy if exists workouts_insert_coach on public.workouts;
 create policy workouts_insert_coach on public.workouts for insert
