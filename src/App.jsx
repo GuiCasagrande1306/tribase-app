@@ -995,7 +995,10 @@ function RealizedWorkouts({ workouts }) {
   const totalMin = sum(done.map((w) => w.durationMin));
   return (
     <div style={{ ...card.base, marginBottom: 16 }}>
-      <SectionTitle><Activity size={15} style={{ marginRight: 6, verticalAlign: "-2px", color: "#fc5200" }} />Treinos realizados · últimos 30 dias</SectionTitle>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <SectionTitle><StravaMark size={15} color="#fc4c02" style={{ marginRight: 6, verticalAlign: "-2px" }} />Treinos realizados · últimos 30 dias</SectionTitle>
+        <PoweredByStrava style={{ marginBottom: 12 }} />
+      </div>
       {done.length === 0 ? (
         <p style={{ color: MUTE, fontSize: 13, lineHeight: 1.6, margin: 0 }}>Nenhum treino realizado nos últimos 30 dias. Assim que o aluno treinar (com o Strava conectado), aparece aqui automaticamente.</p>
       ) : (
@@ -1623,7 +1626,35 @@ function DisciplineBars({ workouts }) {
 
 
 /* ================= Strava (conexão + sincronização) ================= */
-const STRAVA_ORANGE = "#fc5200";
+const STRAVA_ORANGE = "#fc4c02"; // laranja oficial Strava
+function StravaMark({ size = 16, color = "#fff", style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden="true" style={{ flexShrink: 0, ...style }}>
+      <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
+    </svg>
+  );
+}
+// Botão oficial "Connect with Strava" (diretrizes de marca do Strava)
+function StravaConnectButton({ onClick, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled} title="Connect with Strava" style={{
+      display: "inline-flex", alignItems: "center", gap: 9, padding: "11px 18px", borderRadius: 8, border: "none",
+      cursor: "pointer", background: STRAVA_ORANGE, color: "#fff", fontWeight: 700, fontSize: 14, opacity: disabled ? 0.6 : 1,
+    }}>
+      <StravaMark size={18} color="#fff" /> Connect with Strava
+    </button>
+  );
+}
+// Atribuição obrigatória onde há dados do Strava
+function PoweredByStrava({ style }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, ...style }}>
+      <span style={{ fontSize: 10.5, color: MUTE }}>Powered by</span>
+      <StravaMark size={12} color={STRAVA_ORANGE} />
+      <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.3, color: STRAVA_ORANGE }}>STRAVA</span>
+    </div>
+  );
+}
 function StravaCard({ onSynced }) {
   const [status, setStatus] = useState(undefined); // undefined=carregando, null=desconectado, obj=conectado
   const [busy, setBusy] = useState(false);
@@ -1659,7 +1690,7 @@ function StravaCard({ onSynced }) {
       <SectionTitle>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
           <span style={{ width: 20, height: 20, borderRadius: 6, background: STRAVA_ORANGE, display: "grid", placeItems: "center", flexShrink: 0 }}>
-            <Activity size={13} color="#fff" />
+            <StravaMark size={13} color="#fff" />
           </span>
           Strava — sincronização automática
         </span>
@@ -1674,9 +1705,9 @@ function StravaCard({ onSynced }) {
             e concilia com os treinos planejados.
             {status.last_sync && <> Última sincronização: <b style={{ color: TEXT }}>{new Date(status.last_sync).toLocaleString("pt-BR")}</b>.</>}
           </p>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button disabled={busy} onClick={sync} style={{ ...btn.solid, background: `linear-gradient(135deg,${STRAVA_ORANGE},#ff7a2c)`, opacity: busy ? 0.6 : 1 }}>
-              <Activity size={16} /> {busy ? "sincronizando…" : "Sincronizar agora"}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <button disabled={busy} onClick={sync} style={{ ...btn.solid, background: STRAVA_ORANGE, opacity: busy ? 0.6 : 1 }}>
+              <StravaMark size={16} /> {busy ? "sincronizando…" : "Sincronizar agora"}
             </button>
             <button disabled={busy} onClick={disconnect} style={btn.ghost}>desconectar</button>
           </div>
@@ -1686,12 +1717,11 @@ function StravaCard({ onSynced }) {
           <p style={{ color: MUTE, fontSize: 12.5, lineHeight: 1.6, marginBottom: 12 }}>
             Conecte sua conta do Strava e seus treinos entram <b style={{ color: "#a3e635" }}>automaticamente</b> — sem exportar arquivo.
           </p>
-          <button onClick={connect} style={{ ...btn.solid, background: `linear-gradient(135deg,${STRAVA_ORANGE},#ff7a2c)` }}>
-            <Activity size={16} /> Conectar Strava
-          </button>
+          <StravaConnectButton onClick={connect} />
         </>
       )}
       {msg && <div style={{ fontSize: 12.5, marginTop: 10, color: msg.ok ? "#a3e635" : "#ff8a73" }}>{msg.t}</div>}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${LINE}` }}><PoweredByStrava /></div>
     </div>
   );
 }
