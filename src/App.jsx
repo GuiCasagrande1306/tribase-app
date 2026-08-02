@@ -199,6 +199,7 @@ const demoApi = {
   listWorkouts: async (athleteId) => demoWorkouts.filter((w) => w.athlete_id === athleteId).sort((a, b) => a.date.localeCompare(b.date)).map(mapW),
   addWorkout: async (w) => { demoWorkouts.push(_row(w)); return _ok; },
   addWorkouts: async (rows) => { rows.forEach((r) => demoWorkouts.push(_row(r))); return _ok; },
+  clearPlannedRange: async (athleteId, from, to) => { demoWorkouts = demoWorkouts.filter((w) => !(w.athlete_id === athleteId && w.status !== "concluído" && w.date >= from && w.date <= to)); return _ok; },
   updateWorkout: async (id, fields) => { const w = demoWorkouts.find((x) => x.id === id); if (w) Object.assign(w, fields); return _ok; },
   deleteWorkout: async (id) => { const i = demoWorkouts.findIndex((x) => x.id === id); if (i >= 0) demoWorkouts.splice(i, 1); return _ok; },
   aiRecalibrate: async () => ({ data: { ok: true, result: { analise: "Modo demo: exemplo de análise.", aderencia: "demo", ajustes: [] } }, error: null }),
@@ -233,6 +234,7 @@ const supaApi = {
   },
   addWorkout: async (w) => supabase.from("workouts").insert(w),
   addWorkouts: async (rows) => supabase.from("workouts").insert(rows),
+  clearPlannedRange: async (athleteId, from, to) => supabase.from("workouts").delete().eq("athlete_id", athleteId).neq("status", "concluído").gte("date", from).lte("date", to),
   updateWorkout: async (id, fields) => supabase.from("workouts").update(fields).eq("id", id),
   deleteWorkout: async (id) => supabase.from("workouts").delete().eq("id", id),
   aiRecalibrate: async (payload) => supabase.functions.invoke("ai-recalibrate", { body: payload }),
@@ -1341,6 +1343,11 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
       duration_min: Number(a.duration_min) || 0, distance: Number(a.distance) || 0, dist_unit: a.dist_unit || "km",
       target: a.target || null, notes: a.notes || null, status: "planejado",
     }));
+    // substitui o plano antigo: remove treinos PLANEJADOS (não os concluídos/realizados)
+    // no intervalo coberto pela nova planilha, pra não ficarem 2 treinos no mesmo dia.
+    const ds = ajustes.map((a) => a.date).sort();
+    const { error: eDel } = await api.clearPlannedRange(athlete.id, ds[0], ds[ds.length - 1]);
+    if (eDel) { setMsg({ ok: false, t: eDel.message }); setBusy(false); return; }
     const { error } = await api.addWorkouts(rows);
     if (error) { setMsg({ ok: false, t: error.message }); setBusy(false); return; }
     await api.decideProposal(prop.id, "approved");
