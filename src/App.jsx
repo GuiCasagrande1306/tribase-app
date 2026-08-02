@@ -1370,16 +1370,20 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
               <button disabled={busy} onClick={approve} style={{ ...btn.solid, opacity: busy ? 0.6 : 1 }}><CheckCircle2 size={16} /> {busy ? "aplicando…" : "Aprovar e aplicar"}</button>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflow: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 440, overflow: "auto" }}>
             {(prop.workouts || []).map((w, i) => {
               const meta = DISC[w.discipline] || DISC["Corrida"]; const Icon = meta.icon;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10 }}>
-                  <Icon size={15} color={meta.c} />
-                  <span className="mono" style={{ fontSize: 11, color: MUTE, width: 44 }}>{w.date ? dm(toDate(w.date)) : "?"}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: meta.c, width: 64 }}>{w.discipline}</span>
-                  <span className="disp" style={{ flex: 1, fontSize: 13, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.type}{w.target ? ` · ${w.target}` : ""}</span>
-                  <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.duration_min ? fmtDur(w.duration_min) : ""}{w.distance ? ` · ${w.distance}${w.dist_unit || ""}` : ""}</span>
+                <div key={i} style={{ padding: "10px 12px", background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <Icon size={15} color={meta.c} />
+                    <span className="mono" style={{ fontSize: 11, color: MUTE }}>{w.date ? dm(toDate(w.date)) : "?"}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: meta.c }}>{w.discipline}</span>
+                    <span className="disp" style={{ fontSize: 13.5, fontWeight: 600, color: TEXT }}>{w.type}</span>
+                    <span className="mono" style={{ marginLeft: "auto", fontSize: 11, color: MUTE }}>{w.duration_min ? fmtDur(w.duration_min) : ""}{w.distance ? ` · ${w.distance}${w.dist_unit || ""}` : ""}</span>
+                  </div>
+                  {w.target && <div className="mono" style={{ fontSize: 11.5, color: "#a3e635", marginTop: 6 }}>🎯 {w.target}</div>}
+                  {w.notes && <div style={{ fontSize: 12, color: MUTE, lineHeight: 1.5, marginTop: 5, whiteSpace: "pre-wrap" }}>{w.notes}</div>}
                 </div>
               );
             })}
@@ -2051,10 +2055,13 @@ function WorkoutRow({ w, onToggle, onRpe, onDelete, onOpen, coach }) {
           <div style={{ display: "flex", gap: 12, marginTop: 2, fontSize: 11.5, color: MUTE, flexWrap: "wrap" }} className="mono">
             {dur && <span>{dur}</span>}{dist && <span>{dist}</span>}
             {pace && <span style={{ color: "#9fb0cc" }}>{pace}</span>}
-            {w.target && <span style={{ color: "#cdd6e6" }}>{w.target}</span>}
+            {w.target && <span style={{ color: "#a3e635" }}>{w.target}</span>}
             {w.avgHr && <span style={{ color: "#ff8a73" }}>♥ {w.avgHr}</span>}
             {done && w.rpe && <span style={{ color: "#a3e635" }}>RPE {w.rpe}</span>}
           </div>
+          {w.notes && (
+            <div style={{ fontSize: 11.5, color: MUTE, lineHeight: 1.45, marginTop: 4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{w.notes}</div>
+          )}
         </div>
       </div>
       {onToggle && (
@@ -2254,10 +2261,10 @@ function WorkoutDetail({ w, onClose, onToggle, onRpe, onDelete }) {
 
         <div style={{ marginTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTE, fontWeight: 700, marginBottom: 6 }}>
-            <FileText size={13} /> OBSERVAÇÕES DO TREINADOR
+            <FileText size={13} /> DESCRIÇÃO DO TREINO
           </div>
           <div style={{ background: PANEL2, border: `1px solid ${LINE}`, borderRadius: 12, padding: "12px 14px", fontSize: 13.5, color: w.notes ? TEXT : MUTE, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-            {w.notes || "Sem observações para este treino."}
+            {w.notes || "Sem descrição para este treino."}
           </div>
         </div>
 

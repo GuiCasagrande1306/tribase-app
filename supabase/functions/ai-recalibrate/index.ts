@@ -56,6 +56,7 @@ PRINCÍPIOS OBRIGATÓRIOS:
 - Respeite a MODALIDADE do atleta: em "Triathlon", combine natação/pedal/corrida + brick e, aos sábados, 2 modalidades em sequência com transição (alterne T2 bike→corrida e, pontualmente, T1 nado→bike); em "Corrida"/"Natação"/"Ciclismo", foque SÓ nesse esporte (sem brick/transição), variando os tipos de sessão.
 - Os ritmos/zonas devem sair dos dados REAIS (melhoresRitmos e realizados vindos do Strava); não invente FC/pace se não houver dado — use percepção de esforço.
 - Datas da próxima semana: use as datas reais (a partir de "hoje" informado no payload).
+- Em CADA treino: no campo "target" ponha o alvo principal (pace + zona de FC, ex.: "4:05/km · FC 178-182 · Z5"); no campo "notes" descreva a SESSÃO COMPLETA: aquecimento + série principal (nº de repetições, distância/tempo, pace/FC-alvo e pausa entre reps) + soltura. Ex.: "Aquece 15' fácil (5:30/km). Principal: 5×3min @4:05/km (FC 178-182), 3min trote entre. Solta 10'."
 
 Escreva a "analise" em português, curta e direta, como um treinador falando com outro (o treinador humano vai revisar e aprovar).
 Devolva SOMENTE o JSON no schema pedido.`;
