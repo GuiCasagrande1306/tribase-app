@@ -1343,10 +1343,14 @@ function AiRecalibrate({ coachId, athlete, workouts, onApplied }) {
       duration_min: Number(a.duration_min) || 0, distance: Number(a.distance) || 0, dist_unit: a.dist_unit || "km",
       target: a.target || null, notes: a.notes || null, status: "planejado",
     }));
-    // substitui o plano antigo: remove treinos PLANEJADOS (não os concluídos/realizados)
-    // no intervalo coberto pela nova planilha, pra não ficarem 2 treinos no mesmo dia.
+    // substitui o plano antigo: remove TODOS os treinos PLANEJADOS (não os concluídos/
+    // realizados) da SEMANA da proposta, pra não somar/duplicar treinos ao aprovar de novo.
     const ds = ajustes.map((a) => a.date).sort();
-    const { error: eDel } = await api.clearPlannedRange(athlete.id, ds[0], ds[ds.length - 1]);
+    const wkStart = prop.week_start || ds[0];
+    const wkEnd = addDays(wkStart, 6);
+    const from = ds[0] < wkStart ? ds[0] : wkStart;
+    const to = ds[ds.length - 1] > wkEnd ? ds[ds.length - 1] : wkEnd;
+    const { error: eDel } = await api.clearPlannedRange(athlete.id, from, to);
     if (eDel) { setMsg({ ok: false, t: eDel.message }); setBusy(false); return; }
     const { error } = await api.addWorkouts(rows);
     if (error) { setMsg({ ok: false, t: error.message }); setBusy(false); return; }
